@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="")
 
 bertscore = load("bertscore")
 
