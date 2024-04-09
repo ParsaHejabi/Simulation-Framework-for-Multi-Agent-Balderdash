@@ -1,0 +1,4 @@
+Given the following definitions:
+{definitions}
+
+Vote for the most convincing definition (enter the number):
