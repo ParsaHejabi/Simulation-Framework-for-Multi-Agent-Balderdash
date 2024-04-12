@@ -1,4 +1,4 @@
-Given the following definitions:
+For the word "{word}", you have provided this definition "{definition}". Now given the following definitions:
 {definitions}
 
 Vote for the most convincing definition (enter the number):
