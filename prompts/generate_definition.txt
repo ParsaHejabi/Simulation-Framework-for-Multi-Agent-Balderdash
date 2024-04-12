@@ -1,1 +1,1 @@
-Generate a definition for the word "{word}":
+As a Balderdash player, generate a one-sentence definition for the word "{word}":
