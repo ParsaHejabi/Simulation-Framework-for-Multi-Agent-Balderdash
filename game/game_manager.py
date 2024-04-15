@@ -8,6 +8,7 @@ import pandas as pd
 from ast import literal_eval
 from typing import Optional
 import torch
+from utils.llm import LLM
 
 
 class GameManager:
@@ -20,9 +21,18 @@ class GameManager:
         self.device = self.get_device()
         self.logger.info(f"Using device: {self.device}")
 
-    def create_player(self, player_id: int, name: str) -> None:
-        self.logger.info(f"Creating player: {player_id} - {name}")
-        player = Player(player_id, name, self.device)
+        self.llms = {}
+
+    def get_or_load_llm(self, model_name: str = LLM_MODEL) -> LLM:
+        if model_name not in self.llms:
+            self.logger.info(f"Loading LLM: {model_name} on device: {self.device}")
+            self.llms[model_name] = LLM(self.device, model_name)
+        return self.llms[model_name]
+
+    def create_player(self, player_id: int, name: str, model_name: Optional[str] = None) -> None:
+        llm = self.get_or_load_llm(model_name)
+        self.logger.info(f"Creating player: {player_id} - {name} with LLM: {llm.model_name}")
+        player = Player(player_id, name, llm)
         self.players.append(player)
         self.db.insert_player(player.__dict__)
 

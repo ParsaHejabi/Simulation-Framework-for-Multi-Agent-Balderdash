@@ -12,19 +12,19 @@ class MongoDB:
 
     def insert_player(self, player_data: dict) -> None:
         # Check if the player_data has "logger," "device," "tokenizer," "model" keys, drop them
-        player_data.pop("logger", None)
-        player_data.pop("device", None)
-        player_data.pop("tokenizer", None)
-        player_data.pop("model", None)
-        self.db["players"].insert_one(player_data)
+        player_data_for_db = player_data.copy()
+        player_data_for_db.pop("logger", None)
+        player_data_for_db.pop("llm", None)
+        self.db["players"].insert_one(player_data_for_db)
 
     def update_player(self, player_id: int, update_data: dict) -> None:
         self.db["players"].update_one({"_id": player_id}, {"$set": update_data})
 
     def insert_round(self, round_data: dict) -> None:
         # Check if the round_data has "logger" key, drop it
-        round_data.pop("logger", None)
-        self.db["rounds"].insert_one(round_data)
+        round_data_for_db = round_data.copy()
+        round_data_for_db.pop("logger", None)
+        self.db["rounds"].insert_one(round_data_for_db)
 
     def send_ping(self) -> None:
         # Send a ping to confirm a successful connection
