@@ -23,7 +23,8 @@ class Round:
     def calculate_scores(self):
         self.logger.info("Calculating scores")
         scores = {}
-        correct_votes = 0
+        for player_id in self.player_definitions.keys():
+            scores[player_id] = 0
 
         # Count the number of votes for each definition
         vote_counts = {}
@@ -35,17 +36,11 @@ class Round:
 
         # Assign scores to players
         for player_id, definition in self.player_definitions.items():
+            # TODO - If judge decides that the definition is equal to the correct definition, player gets 3 points
             if definition == self.correct_definition:
-                scores[player_id] = 2  # Player gets 2 points for the correct definition
-                correct_votes += 1
+                scores[player_id] += 3
             else:
-                scores[player_id] = vote_counts.get(
-                    player_id, 0
-                )  # Player gets points based on the votes received
-
-        # If no one guessed the correct definition, the dasher gets 2 points
-        if correct_votes == 0:
-            scores["dasher"] = 2
+                scores[player_id] = vote_counts.get(player_id, 0)
 
         self.logger.info(f"Calculated scores: {scores}")
         return scores
