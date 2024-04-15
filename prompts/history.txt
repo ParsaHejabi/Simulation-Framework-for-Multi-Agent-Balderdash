@@ -1,0 +1,12 @@
+The history of your performance in previous rounds is provided in csv format and following is the column descriptions:
+Word: the announced word.
+Definition: the dictionary definition of the announced word.
+Generated_Definition: your definiton for that round.
+Winning Definition: definiton provided by the winner of that round.
+Writing_True_Definition: boolean showing whehter you have written down the correct definiton.
+Guessing_Correct_Definiton: boolean showing whether you have guessed correctly in voting phase.
+Deception_Score: the number of players that were deceived by your definiton in voting phase.
+```
+Word,Definition,Generated_Definiton,Winning_Definiton,Writing_True_Definiton,Guessing_Correct_Definiton,Deception_Score
+{data}
+```
