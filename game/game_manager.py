@@ -12,7 +12,7 @@ from utils.llm import LLM
 
 
 class GameManager:
-    def __init__(self, db_connection_string: str) -> None:
+    def __init__(self, db_connection_string: str, llm_model_name: str = LLM_MODEL) -> None:
         self.logger = setup_logger("game_manager", "logs/game_manager.log")
         self.logger.info("Initializing GameManager")
         self.db = MongoDB(db_connection_string)
@@ -22,6 +22,7 @@ class GameManager:
         self.logger.info(f"Using device: {self.device}")
 
         self.llms = {}
+        self.judge_llm = LLM(self.device, model_name=llm_model_name)
 
     def get_or_load_llm(self, model_name: str = LLM_MODEL) -> LLM:
         if model_name not in self.llms:
@@ -65,14 +66,29 @@ class GameManager:
             with open("prompts/generate_definition.txt", "r") as file:
                 prompt_template = file.read()
             definition = player.generate_definition(word, prompt_template)
-            round.add_player_definition(player.player_id, definition)
 
+            with open("prompts/judge.txt", "r") as file:
+                judge_prompt_template = file.read()
+            judge_decision = self.judge_llm.judge_decision(
+                word, correct_definition, definition, judge_prompt_template
+            )
+            round.add_player_definition(player.player_id, definition, judge_decision=judge_decision)
+
+        eligible_voting_players_definitions = round.get_eligible_voting_players_definitions()
         # Perform voting
         for player in self.players:
+            # Skip players who defined the word correctly
+            if round.player_definitions[player.player_id][1]:
+                continue
             with open("prompts/vote_definition.txt", "r") as file:
                 prompt_template = file.read()
-            vote = player.vote_definition(round.player_definitions, prompt_template)
-            round.add_vote(player.player_id, vote)
+            target_permuted_player_id = player.vote_definition(
+                word,
+                round.player_definitions[player.player_id][0],
+                eligible_voting_players_definitions,
+                prompt_template,
+            )
+            round.add_vote(player.player_id, target_permuted_player_id)
 
         # Calculate scores
         scores = round.calculate_scores()

@@ -24,6 +24,12 @@ class MongoDB:
         # Check if the round_data has "logger" key, drop it
         round_data_for_db = round_data.copy()
         round_data_for_db.pop("logger", None)
+        round_data_for_db.pop("definitions_permutation", None)
+        # player_definitions and votes are dictionaries, convert all keys to strings
+        player_definitions = {str(k): v for k, v in round_data_for_db["player_definitions"].items()}
+        votes = {str(k): v for k, v in round_data_for_db["votes"].items()}
+        round_data_for_db["player_definitions"] = player_definitions
+        round_data_for_db["votes"] = votes
         self.db["rounds"].insert_one(round_data_for_db)
 
     def send_ping(self) -> None:

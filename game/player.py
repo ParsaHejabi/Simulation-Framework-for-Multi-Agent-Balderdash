@@ -1,5 +1,6 @@
 from utils.logger import setup_logger
 from utils.llm import LLM
+from typing import List
 
 
 class Player:
@@ -19,6 +20,8 @@ class Player:
         self.logger.info(f"Generating definition for word: {word} for player: {self.player_id} - {self.name}")
         return self.llm.generate_definition(word, prompt_template)
 
-    def vote_definition(self, definitions: dict, prompt_template: str) -> int:
+    def vote_definition(
+        self, word: str, definition: str, definitions: List[str], prompt_template: str
+    ) -> int:
         self.logger.info(f"Voting on definitions for player: {self.player_id} - {self.name}")
-        return self.llm.vote_definition(definitions, prompt_template)
+        return self.llm.vote_definition(word, definition, definitions, prompt_template)
