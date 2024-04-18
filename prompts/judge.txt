@@ -1,1 +1,1 @@
-{word} is defined as {dictionary_definiton}. Answer in True or False. Is the following sentence also a true definition of {word}: {definition}?
+{word} is defined as {dictionary_definiton}. Answer in True or False without any explanation. Is the following sentence also a true definition of {word}: {definition}?
