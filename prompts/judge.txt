@@ -1,1 +1,1 @@
-{word} is defined as {dictionary_definiton}. Answer in True or False without any explanation. Is the following sentence also a true definition of {word}: {definition}?
+You are a Dasher in Balderdash game judging whether the received definition is correct or not. You receive the word “{word}”  defined as “{dictionary_definiton}”. Is the following sentence also a true definition of {word}: “{definition}”? Answer in only one word without any explanation, "True" or "False".
