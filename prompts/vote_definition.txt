@@ -1,4 +1,2 @@
-For the word "{word}", you have provided this definition "{definition}". Now given the following definitions:
+As a Balderdash player, choose the correct definition among the following definitions for the word "{word}". Generate just ONE number corresponding to the true definition without any explanation.
 {definitions}
-
-Vote for the most convincing definition (enter the number):
