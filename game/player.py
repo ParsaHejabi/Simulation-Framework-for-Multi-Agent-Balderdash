@@ -6,7 +6,7 @@ from typing import List
 class Player:
     def __init__(self, player_id: int, name: str, llm: LLM) -> None:
         self.logger = setup_logger(f"player_{player_id}", f"logs/player_{player_id}.log")
-        self.logger.info(f"Initializing Player: {player_id} - {name}")
+        self.logger.info(f"Initializing Player: {player_id} - Name: {name} - LLM: {llm.model_name}")
         self.player_id = player_id
         self.name = name
         self.score = 0

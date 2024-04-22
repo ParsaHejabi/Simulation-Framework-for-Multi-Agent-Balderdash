@@ -1,2 +1,10 @@
-As a Balderdash player, choose the correct definition among the following definitions for the word "{word}". Generate just ONE number corresponding to the true definition without any explanation.
+Here is your definition of "{word}": "{definition}". Following definitions are in the format of:
+```
+number_1: definition_1
+number_2: definition_2
+```
+Now given the following definitions:
+```
 {definitions}
+```
+Which one is the most convincing definition? Generate ONLY THE NUMBER of that definition. DO NOT CHOOSE YOUR OWN DEFINITION. DO NOT WRITE ANYTHING BUT A SINGLE INTEGER WITHOUT ANY PUNCTUATIONS AND EXPLANATION:

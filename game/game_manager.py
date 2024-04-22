@@ -50,6 +50,7 @@ class GameManager:
     def start_game(self, words_file: str = "data/words.csv") -> None:
         self.logger.info("Starting the game")
         self.load_word_data(words_file)
+        self.logger.info(f"Loaded {len(self.word_data)} words and playing {NUM_ROUNDS} rounds")
         for round_id in range(1, NUM_ROUNDS + 1):
             self.play_round(round_id)
 
@@ -57,6 +58,7 @@ class GameManager:
         self.logger.info(f"Playing round: {round_id}")
         # Select a random word and its definition
         word, correct_definition, pos = self.get_random_word()
+        self.logger.info(f"Selected word: {word} with definition: {correct_definition}, and POS: {pos}")
 
         # Create a new round
         round = Round(round_id, word, correct_definition, pos)
@@ -66,19 +68,29 @@ class GameManager:
             with open("prompts/generate_definition.txt", "r") as file:
                 prompt_template = file.read()
             definition = player.generate_definition(word, prompt_template)
+            self.logger.info(
+                f"Player {player.player_id} - {player.name} defined the word {word} as: {definition}"
+            )
 
             with open("prompts/judge.txt", "r") as file:
                 judge_prompt_template = file.read()
             judge_decision = self.judge_llm.judge_decision(
                 word, correct_definition, definition, judge_prompt_template
             )
+            self.logger.info(
+                f"Judge decision for player {player.player_id} - {player.name} with definition: {definition} is: {judge_decision}"
+            )
             round.add_player_definition(player.player_id, definition, judge_decision=judge_decision)
 
         eligible_voting_players_definitions = round.get_eligible_voting_players_definitions()
+        self.logger.info(f"Eligible voting players definitions: {eligible_voting_players_definitions}")
         # Perform voting
         for player in self.players:
             # Skip players who defined the word correctly
             if round.player_definitions[player.player_id][1]:
+                self.logger.info(
+                    f"Skipping player {player.player_id} - {player.name} from voting as they defined the word correctly"
+                )
                 continue
             with open("prompts/vote_definition.txt", "r") as file:
                 prompt_template = file.read()
@@ -88,10 +100,14 @@ class GameManager:
                 eligible_voting_players_definitions,
                 prompt_template,
             )
+            self.logger.info(
+                f"Player {player.player_id} - {player.name} voted for definition: {target_permuted_player_id}"
+            )
             round.add_vote(player.player_id, target_permuted_player_id)
 
         # Calculate scores
         scores = round.calculate_scores()
+        self.logger.info(f"Round scores: {scores}")
         for player_id, score in scores.items():
             player = self.get_player_by_id(player_id)
             player.update_score(score)

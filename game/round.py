@@ -6,7 +6,9 @@ import random
 class Round:
     def __init__(self, round_id: int, word: str, correct_definition: str, pos: str) -> None:
         self.logger = setup_logger(f"round_{round_id}", f"logs/round_{round_id}.log")
-        self.logger.info(f"Initializing Round: {round_id} - Word: {word}")
+        self.logger.info(
+            f"Initializing Round: {round_id} - Word: {word}, Correct Definition: {correct_definition}, POS: {pos}"
+        )
         self.round_id = round_id
         self.word = word
         self.correct_definition = correct_definition
