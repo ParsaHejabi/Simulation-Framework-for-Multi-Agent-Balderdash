@@ -4,15 +4,20 @@ import random
 
 
 class Round:
-    def __init__(self, round_id: int, word: str, correct_definition: str, pos: str) -> None:
+    def __init__(
+        self, game_id: int, round_id: int, word: str, correct_definition: str, pos: str, players: List[int]
+    ) -> None:
         self.logger = setup_logger(f"round_{round_id}", f"logs/round_{round_id}.log")
         self.logger.info(
             f"Initializing Round: {round_id} - Word: {word}, Correct Definition: {correct_definition}, POS: {pos}"
         )
+        self.game_id = game_id
+        self.players = players
         self.round_id = round_id
         self.word = word
         self.correct_definition = correct_definition
         self.pos = pos
+        self.scores = {}
         self.player_definitions = {}
         self.definitions_permutation = []
         self.votes = {}
@@ -40,11 +45,11 @@ class Round:
         # A random permutation of shuffled all_definitions.keys()
         self.definitions_permutation = random.sample(all_definitions.keys(), len(all_definitions))
         return [
-            f"{index + 1}: {all_definitions[player_id]}"
+            f"{index + 1}. {all_definitions[player_id]}"
             for index, player_id in enumerate(self.definitions_permutation)
         ]
 
-    def calculate_scores(self):
+    def calculate_scores(self) -> dict:
         self.logger.info("Calculating scores")
         scores = {}
         for player_id in self.player_definitions.keys():
@@ -62,4 +67,5 @@ class Round:
                 scores[player_id] += 3
 
         self.logger.info(f"Calculated scores: {scores}")
+        self.scores = scores
         return scores

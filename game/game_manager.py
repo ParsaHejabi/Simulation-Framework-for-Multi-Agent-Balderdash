@@ -22,7 +22,7 @@ class GameManager:
         self.logger.info(f"Using device: {self.device}")
 
         self.llms = {}
-        self.judge_llm = LLM(self.device, model_name=llm_model_name)
+        self.judge_llm = self.get_or_load_llm(llm_model_name)
 
     def get_or_load_llm(self, model_name: str = LLM_MODEL) -> LLM:
         if model_name not in self.llms:
@@ -30,8 +30,10 @@ class GameManager:
             self.llms[model_name] = LLM(self.device, model_name)
         return self.llms[model_name]
 
-    def create_player(self, player_id: int, name: str, model_name: Optional[str] = None) -> None:
+    def create_player(self, name: str, model_name: Optional[str] = None) -> None:
         llm = self.get_or_load_llm(model_name)
+        last_player_id = self.db.get_last_player_id()
+        player_id = last_player_id + 1
         self.logger.info(f"Creating player: {player_id} - {name} with LLM: {llm.model_name}")
         player = Player(player_id, name, llm)
         self.players.append(player)
@@ -51,17 +53,32 @@ class GameManager:
         self.logger.info("Starting the game")
         self.load_word_data(words_file)
         self.logger.info(f"Loaded {len(self.word_data)} words and playing {NUM_ROUNDS} rounds")
+        last_game_id = self.db.get_last_game_id()
+        game_id = last_game_id + 1
         for round_id in range(1, NUM_ROUNDS + 1):
-            self.play_round(round_id)
+            self.play_round(game_id, round_id)
 
-    def play_round(self, round_id: int) -> None:
+    def create_round(
+        self, game_id: int, round_id: int, word: str, correct_definition: str, pos: str
+    ) -> Round:
+        self.logger.info(f"Creating round: {round_id}/10 in game: {game_id} with word: {word}")
+        return Round(
+            game_id=game_id,
+            round_id=round_id,
+            word=word,
+            correct_definition=correct_definition,
+            pos=pos,
+            players=[player.player_id for player in self.players],
+        )
+
+    def play_round(self, game_id: int, round_id: int) -> None:
         self.logger.info(f"Playing round: {round_id}")
         # Select a random word and its definition
         word, correct_definition, pos = self.get_random_word()
         self.logger.info(f"Selected word: {word} with definition: {correct_definition}, and POS: {pos}")
 
         # Create a new round
-        round = Round(round_id, word, correct_definition, pos)
+        round = self.create_round(game_id, round_id, word, correct_definition, pos)
 
         # Generate definitions from players
         for player in self.players:

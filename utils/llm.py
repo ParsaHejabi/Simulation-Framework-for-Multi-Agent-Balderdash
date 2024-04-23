@@ -1,5 +1,5 @@
 from utils.logger import setup_logger
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from utils.config import LLM_MODEL
 import torch
 from typing import List
@@ -21,63 +21,105 @@ class LLM:
 
             self.model, self.tokenizer = load(model_name)
         else:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
-            # TODO: Quantize the model!
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name, token=os.getenv("HF_TOKEN"), device_map="auto"
-            ).to(self.device)
+            if self.model_name == "meta-llama/Meta-Llama-3-8B-Instruct":
+                self.pipe = pipeline(
+                    "text-generation",
+                    model=self.model_name,
+                    # model_kwargs={"torch_dtype": torch.bfloat16},
+                    device=self.device,
+                    temperature=self.temp,
+                    max_new_tokens=self.max_tokens,
+                    do_sample=True,
+                )
+            elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.2":
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
+                self.model = AutoModelForCausalLM.from_pretrained(model_name, token=os.getenv("HF_TOKEN")).to(
+                    self.device
+                )
+                self.pipe = pipeline(
+                    task="text-generation",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    device=self.device,
+                    temperature=self.temp,
+                    max_new_tokens=self.max_tokens,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    do_sample=True,
+                )
 
-        self.logger.info(f"Initialized LLM with model: {model_name} on device: {self.device}")
-
-    def generate_definition(self, word: str, prompt_template: str) -> str:
-        self.logger.info(f"Generating definition for word: {word} using model: {self.model_name}")
-        prompt = prompt_template.format(word=word)
+    def generate_answer(self, messages: List[dict]) -> str:
         if self.device.type == "mps":
-            messages = [
-                {"role": "user", "content": prompt},
-            ]
-            encoded_messages = self.tokenizer.apply_chat_template(messages, return_tensors="pt")
+            # TODO: For Mac it doesn't work
             from mlx_lm import generate
 
             return generate(
                 self.model,
                 self.tokenizer,
-                encoded_messages,
+                messages,
                 verbose=True,
                 max_tokens=self.max_tokens,
                 temp=self.temp,
-            ).strip()
+            )
         else:
-            messages = [
-                {"role": "user", "content": prompt},
-            ]
-            model_inputs = self.tokenizer.apply_chat_template(messages, return_tensors="pt").to(self.device)
-            # model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.device)
-            generated_ids = self.model.generate(model_inputs, max_new_tokens=100, do_sample=True)
-            definition = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-            return definition.strip()
+            if self.model_name == "meta-llama/Meta-Llama-3-8B-Instruct":
+                prompt = self.pipe.tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
+                )
+                self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
+                terminators = [
+                    self.pipe.tokenizer.eos_token_id,
+                    self.pipe.tokenizer.convert_tokens_to_ids("<|eot_id|>"),
+                ]
+                outputs = self.pipe(
+                    prompt,
+                    do_sample=True,
+                    eos_token_id=terminators,
+                    temperature=self.temp,
+                )
+                return outputs[0]["generated_text"][len(prompt) :]
+            elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.2":
+                prompt = self.tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
+                )
+                self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
+                outputs = self.pipe(
+                    prompt,
+                    do_sample=True,
+                    pad_token_id=self.pipe.tokenizer.eos_token_id,
+                    max_new_tokens=self.max_tokens,
+                    temperature=self.temp,
+                )
+                return outputs[0]["generated_text"][len(outputs) :]
+                # output = self.pipe(messages)[0]["generated_text"][-1]["content"].strip()
+
+    def generate_definition(self, word: str, prompt_template: str) -> str:
+        self.logger.info(f"Generating definition for word: {word} using model: {self.model_name}")
+        prompt = prompt_template.format(word=word)
+        messages = [
+            {"role": "user", "content": prompt},
+        ]
+        model_output = self.generate_answer(messages)
+        self.logger.info(f"Model output for generating definition: {model_output}")
+        return model_output.strip()
 
     def vote_definition(self, word, definition, definitions: List[str], prompt_template: str) -> int:
         self.logger.info(f"Voting on definitions: {definitions} using model: {self.model_name}")
         prompt = prompt_template.format(word=word, definition=definition, definitions="\n".join(definitions))
-        if self.device.type == "mps":
-            from mlx_lm import generate
-
-            return int(
-                generate(
-                    self.model,
-                    self.tokenizer,
-                    prompt,
-                    verbose=True,
-                    max_tokens=self.max_tokens,
-                    temp=self.temp,
-                ).strip()
-            )
-        else:
-            model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.device)
-            generated_ids = self.model.generate(**model_inputs, max_new_tokens=10, do_sample=True)
-            vote = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-            return int(vote.strip())
+        messages = [
+            {"role": "user", "content": prompt},
+        ]
+        model_output = self.generate_answer(messages)
+        self.logger.info(f"Model output for voting a definition: {model_output}")
+        try:
+            # if output starts with a number, convert to int and return
+            if model_output[0].isdigit():
+                return int(model_output[0])
+            else:
+                # raise ValueError
+                raise ValueError()
+        except ValueError:
+            self.logger.error(f"Error: {model_output} does not start with a number")
+            exit()
 
     def judge_decision(
         self, word: str, correct_definition: str, definition: str, prompt_template: str
@@ -86,26 +128,9 @@ class LLM:
         prompt = prompt_template.format(
             word=word, correct_definition=correct_definition, definition=definition
         )
-        if self.device.type == "mps":
-            from mlx_lm import generate
-
-            # TODO: Is this the best way to handle this?
-            # We expect the output to be "True" or "False" but in some cases the model gives longer unnecessary outputs. So if the first 5 characters contain the word "True" or "False" we consider it as the output.
-            return (
-                generate(
-                    self.model,
-                    self.tokenizer,
-                    prompt,
-                    verbose=True,
-                    max_tokens=self.max_tokens,
-                    temp=self.temp,
-                )
-                .strip()
-                .lower()[0:4]
-                == "true"
-            )
-        else:
-            model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.device)
-            generated_ids = self.model.generate(**model_inputs, max_new_tokens=10, do_sample=True)
-            decision = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-            return decision.strip().lower()[0:4] == "true"
+        messages = [
+            {"role": "user", "content": prompt},
+        ]
+        model_output = self.generate_answer(messages)
+        self.logger.info(f"Model output for judge decision: {model_output}")
+        return model_output.strip().lower()[0:4] == "true"

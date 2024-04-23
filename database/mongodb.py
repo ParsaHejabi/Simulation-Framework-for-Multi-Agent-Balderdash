@@ -17,8 +17,20 @@ class MongoDB:
         player_data_for_db.pop("llm", None)
         self.db["players"].insert_one(player_data_for_db)
 
+    def get_last_player_id(self) -> int:
+        last_player = self.db["players"].find_one(sort=[("_id", -1)])
+        if last_player:
+            return last_player["player_id"]
+        return 0
+
     def update_player(self, player_id: int, update_data: dict) -> None:
-        self.db["players"].update_one({"_id": player_id}, {"$set": update_data})
+        self.db["players"].update_one({"player_id": player_id}, {"$set": update_data})
+
+    def get_last_game_id(self) -> int:
+        last_game = self.db["rounds"].find_one(sort=[("game_id", -1)])
+        if last_game:
+            return last_game["game_id"]
+        return 0
 
     def insert_round(self, round_data: dict) -> None:
         # Check if the round_data has "logger" key, drop it
@@ -28,8 +40,10 @@ class MongoDB:
         # player_definitions and votes are dictionaries, convert all keys to strings
         player_definitions = {str(k): v for k, v in round_data_for_db["player_definitions"].items()}
         votes = {str(k): v for k, v in round_data_for_db["votes"].items()}
+        scores = {str(k): v for k, v in round_data_for_db["scores"].items()}
         round_data_for_db["player_definitions"] = player_definitions
         round_data_for_db["votes"] = votes
+        round_data_for_db["scores"] = scores
         self.db["rounds"].insert_one(round_data_for_db)
 
     def send_ping(self) -> None:
