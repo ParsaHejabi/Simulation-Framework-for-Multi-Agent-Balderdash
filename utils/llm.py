@@ -92,22 +92,14 @@ class LLM:
                 return outputs[0]["generated_text"][len(outputs) :]
                 # output = self.pipe(messages)[0]["generated_text"][-1]["content"].strip()
 
-    def generate_definition(self, word: str, prompt_template: str) -> str:
+    def generate_definition(self, word: str, messages: List[dict]) -> str:
         self.logger.info(f"Generating definition for word: {word} using model: {self.model_name}")
-        prompt = prompt_template.format(word=word)
-        messages = [
-            {"role": "user", "content": prompt},
-        ]
         model_output = self.generate_answer(messages)
         self.logger.info(f"Model output for generating definition: {model_output}")
         return model_output.strip()
 
-    def vote_definition(self, word, definition, definitions: List[str], prompt_template: str) -> int:
+    def vote_definition(self, definitions, messages: List[dict]) -> int:
         self.logger.info(f"Voting on definitions: {definitions} using model: {self.model_name}")
-        prompt = prompt_template.format(word=word, definition=definition, definitions="\n".join(definitions))
-        messages = [
-            {"role": "user", "content": prompt},
-        ]
         model_output = self.generate_answer(messages)
         self.logger.info(f"Model output for voting a definition: {model_output}")
         try:
@@ -121,16 +113,8 @@ class LLM:
             self.logger.error(f"Error: {model_output} does not start with a number")
             exit()
 
-    def judge_decision(
-        self, word: str, correct_definition: str, definition: str, prompt_template: str
-    ) -> bool:
+    def judge_decision(self, word: str, messages: List[dict]) -> bool:
         self.logger.info(f"Judging decision for word: {word} using model: {self.model_name}")
-        prompt = prompt_template.format(
-            word=word, correct_definition=correct_definition, definition=definition
-        )
-        messages = [
-            {"role": "user", "content": prompt},
-        ]
         model_output = self.generate_answer(messages)
         self.logger.info(f"Model output for judge decision: {model_output}")
         return model_output.strip().lower()[0:4] == "true"

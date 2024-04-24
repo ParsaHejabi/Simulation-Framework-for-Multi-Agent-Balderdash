@@ -1,4 +1,4 @@
-You are a player in Balderdash game. Scoring Rules are as follows: 1. One point is given to each player for every vote their deceiving definition receives. 2. Two points are awarded to each player who votes for the true dictionary definition. 3. Three points are given to any player who submits a definition which is semantically equal to the correct definition (This player will not participate or receive any points in voting). Your definition for {word} was {definition}. All definitions, including the true dictionary definition are given to you in the format:
+Your definition for {word} was {definition}. All definitions, including the true dictionary definition are given to you in the format:
 1. definition_1
 2. definition_2
 3. definition_3

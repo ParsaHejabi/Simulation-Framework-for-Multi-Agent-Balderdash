@@ -27,10 +27,22 @@ class MongoDB:
         self.db["players"].update_one({"player_id": player_id}, {"$set": update_data})
 
     def get_last_game_id(self) -> int:
-        last_game = self.db["rounds"].find_one(sort=[("game_id", -1)])
+        last_game = self.db["games"].find_one(sort=[("game_id", -1)])
         if last_game:
             return last_game["game_id"]
         return 0
+
+    def insert_game(self, game_data: dict) -> None:
+        # Check if the game_data has "logger" key, drop it
+        game_data_for_db = game_data.copy()
+        game_data_for_db.pop("logger", None)
+        self.db["games"].insert_one(game_data_for_db)
+
+    def get_player_rounds(self, player_id: int) -> list:
+        """
+        Rounds collection in the mongodb has a column called players which is an array of player_ids sorted by the game_id and round_id columns.
+        """
+        return list(self.db["rounds"].find({"players": player_id}).sort([("game_id", 1), ("round_id", 1)]))
 
     def insert_round(self, round_data: dict) -> None:
         # Check if the round_data has "logger" key, drop it

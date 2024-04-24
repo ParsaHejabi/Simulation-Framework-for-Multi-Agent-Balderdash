@@ -16,12 +16,10 @@ class Player:
         self.logger.info(f"Player {self.player_id} - {self.name} scored: {points} points")
         self.score += points
 
-    def generate_definition(self, word: str, prompt_template: str) -> str:
+    def generate_definition(self, word: str, messages: List[dict]) -> str:
         self.logger.info(f"Generating definition for word: {word} for player: {self.player_id} - {self.name}")
-        return self.llm.generate_definition(word, prompt_template)
+        return self.llm.generate_definition(word, messages)
 
-    def vote_definition(
-        self, word: str, definition: str, definitions: List[str], prompt_template: str
-    ) -> int:
+    def vote_definition(self, definitions, messages: List[dict]) -> int:
         self.logger.info(f"Voting on definitions for player: {self.player_id} - {self.name}")
-        return self.llm.vote_definition(word, definition, definitions, prompt_template)
+        return self.llm.vote_definition(definitions, messages)

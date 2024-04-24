@@ -1,12 +1,12 @@
-The history of your performance in previous rounds is provided in csv format and following is the column descriptions:
-Word: the announced word.
-Definition: the dictionary definition of the announced word.
-Generated_Definition: your definiton for that round.
-Winning Definition: definiton provided by the winner of that round.
-Writing_True_Definition: boolean showing whehter you have written down the correct definiton.
-Guessing_Correct_Definiton: boolean showing whether you have guessed correctly in voting phase.
-Deception_Score: the number of players that were deceived by your definiton in voting phase.
+Your performance history in the previous rounds will be provided in CSV format between triple backticks. Columns descriptions of the CSV:
+round_id: The id for the corresponding round.
+word: The announced word in that round.
+definition: The true dictionary definition of the announced word.
+generated_definition: Your definition for the announced word.
+wrote_true_definition: A boolean showing whether your definition is semantically equal to the true dictionary definition. If the value of this column is true, you have not participated in the voting phase on that round, and thus, the `guessed_correct_definiton` column will be false.
+guessed_correct_definiton: A boolean showing whether you have correctly guessed the true dictionary definition in the voting phase.
+deception_ratio: The ratio of players who voted to your definition excluding yourself in the voting phase devided by the total number of players who participated in the voting phase. If the `wrote_true_definition` is true, then this value will be -1.
+round_winners_strategies: A list of tuples containing the definition and that definition's outcome for each of the player(s) who got the highest scores in the corresponding round, in the format of [(definition_round_id, outcome_for_definition_round_id)].
 ```
-Word,Definition,Generated_Definiton,Winning_Definiton,Writing_True_Definiton,Guessing_Correct_Definiton,Deception_Score
-{data}
+{history_csv}
 ```
