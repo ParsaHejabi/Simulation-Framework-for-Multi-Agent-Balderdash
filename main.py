@@ -9,7 +9,7 @@ load_dotenv()
 def main() -> None:
     game_manager = GameManager(
         os.getenv("MONGODB_CONNECTION_STRING"),
-        game_description=f"with unlimited history, default rules, known words, no communication, no seed stories",
+        game_description=f"modified prompts for definition and voting, with unlimited history, default rules with more points for correct definition (6) and correct guessing (5), known words, no communication, no seed stories",
         random_seed=RANDOM_SEED,
         judge_llm_model_name=LLM_MODEL,
         llms_temperature=TEMP,

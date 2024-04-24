@@ -190,7 +190,9 @@ class GameManager:
         # Create a new round
         round = self.create_round(game_id, round_id, word, correct_definition, pos)
 
-        with open("prompts/default_game_rules.txt", "r") as game_rules_prompt_template_file:
+        with open(
+            "prompts/default_game_rules_more_points_for_true_def_and_true_guess.txt", "r"
+        ) as game_rules_prompt_template_file:
             game_rules_prompt_template = game_rules_prompt_template_file.read()
 
         # Generate definitions from players

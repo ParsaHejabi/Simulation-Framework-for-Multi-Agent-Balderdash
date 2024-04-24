@@ -57,14 +57,14 @@ class Round:
 
         for player_id, target_player_id in self.votes.items():
             if target_player_id == -1:
-                scores[player_id] += 2
+                scores[player_id] += 5
             else:
                 scores[target_player_id] += 1
 
         # Assign scores to players
         for player_id, (definition, judge_decision) in self.player_definitions.items():
             if judge_decision:
-                scores[player_id] += 3
+                scores[player_id] += 6
 
         self.logger.info(f"Calculated scores: {scores}")
         self.scores = scores
