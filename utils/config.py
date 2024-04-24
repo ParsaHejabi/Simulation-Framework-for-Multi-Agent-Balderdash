@@ -1,5 +1,7 @@
-RANDOM_SEED = 42
-NUM_ROUNDS = 20
+NUM_ROUNDS = 25
+RECEIVING_VOTE_POINTS = 1
+CORRECT_VOTE_POINTS = 5
+CORRECT_DEFINITION_POINTS = 10
 # LLM_MODEL = "mlx-community/NeuralBeagle14-7B" # This is regular model for Mac
 # LLM_MODEL = "mlx-community/Mistral-7B-Instruct-v0.2" # This is instruct model for Mac
 # LLM_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"

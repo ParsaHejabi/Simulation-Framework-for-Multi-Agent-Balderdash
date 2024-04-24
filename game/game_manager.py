@@ -2,7 +2,10 @@ from game.player import Player
 from game.round import Round
 from game.game import Game
 from database.mongodb import MongoDB
-from utils.config import NUM_ROUNDS, LLM_MODEL
+from utils.config import (
+    NUM_ROUNDS,
+    LLM_MODEL,
+)
 import random
 from utils.logger import setup_logger
 import pandas as pd
@@ -21,6 +24,9 @@ class GameManager:
         random_seed: int,
         llms_temperature: float,
         history_window_size: int,
+        receiving_vote_points: int,
+        correct_vote_points: int,
+        correct_definition_points: int,
         judge_llm_model_name: str = LLM_MODEL,
     ) -> None:
         self.logger = setup_logger("game_manager", "logs/game_manager.log")
@@ -31,12 +37,18 @@ class GameManager:
         self.logger.info(f"Using device: {self.device}")
 
         self.llms = {}
+        self.receiving_vote_points = receiving_vote_points
+        self.correct_vote_points = correct_vote_points
+        self.correct_definition_points = correct_definition_points
         self.game = Game(
             self.db.get_last_game_id() + 1,
             game_description=game_description,
             number_of_rounds=NUM_ROUNDS,
             judge_llm_model_name=judge_llm_model_name,
             random_seed=random_seed,
+            receiving_vote_points=self.receiving_vote_points,
+            correct_vote_points=self.correct_vote_points,
+            correct_definition_points=self.correct_definition_points,
         )
         self.db.insert_game(self.game.__dict__)
         self.random_seed = random_seed
@@ -63,14 +75,18 @@ class GameManager:
         self.players.append(player)
         self.db.insert_player(player.__dict__)
 
-    def load_word_data(self, file_path: str, filter_known_words: bool = False) -> None:
+    def load_word_data(self, file_path: str, filter_known_words: str) -> None:
         self.logger.info(f"Loading word data from: {file_path}")
         self.word_data = {}
         data = pd.read_csv(file_path, engine="python")
-        if filter_known_words:
+        if filter_known_words == "known":
             # filter the data using the column "llm_knows_word" in the dataframe and keep only the rows where the value is True
             data = data[data["llm_knows_word"] == True].reset_index(drop=True)
             self.logger.info(f"Filtered known words and loaded {len(data)} words")
+        elif filter_known_words == "unknown":
+            # filter the data using the column "llm_knows_word" in the dataframe and keep only the rows where the value is False
+            data = data[data["llm_knows_word"] == False].reset_index(drop=True)
+            self.logger.info(f"Filtered unknown words and loaded {len(data)} words")
         data = data.sample(self.game.number_of_rounds, random_state=self.random_seed)
         for _, row in data.iterrows():
             word = row["words"].strip().lower()
@@ -80,7 +96,7 @@ class GameManager:
                 pos = pos.strip()
             self.word_data[len(self.word_data) + 1] = {"word": word, "def": definition, "POS": pos}
 
-    def start_game(self, words_file: str, filter_known_words: bool = False) -> None:
+    def start_game(self, words_file: str, filter_known_words: str) -> None:
         self.logger.info("Starting the game")
         self.load_word_data(words_file, filter_known_words=filter_known_words)
         self.logger.info(
@@ -194,10 +210,15 @@ class GameManager:
             "prompts/default_game_rules_more_points_for_true_def_and_true_guess.txt", "r"
         ) as game_rules_prompt_template_file:
             game_rules_prompt_template = game_rules_prompt_template_file.read()
+            game_rules_prompt = game_rules_prompt_template.format(
+                receiving_vote_points=self.receiving_vote_points,
+                correct_vote_points=self.correct_vote_points,
+                correct_definition_points=self.correct_definition_points,
+            )
 
         # Generate definitions from players
         for player in self.players:
-            generate_definition_messages = [{"role": "system", "content": game_rules_prompt_template}]
+            generate_definition_messages = [{"role": "system", "content": game_rules_prompt}]
             with open("prompts/history.txt", "r") as history_prompt_template_file:
                 history_prompt_template = history_prompt_template_file.read()
                 history_csv = self.get_player_history_csv(
@@ -239,7 +260,7 @@ class GameManager:
                     f"Skipping player {player.player_id} - {player.name} from voting as they defined the word correctly"
                 )
                 continue
-            vote_definition_messages = [{"role": "system", "content": game_rules_prompt_template}]
+            vote_definition_messages = [{"role": "system", "content": game_rules_prompt}]
             with open("prompts/history.txt", "r") as history_prompt_template_file:
                 history_prompt_template = history_prompt_template_file.read()
                 history_csv = self.get_player_history_csv(
@@ -266,7 +287,11 @@ class GameManager:
             round.add_vote(player.player_id, target_permuted_player_id)
 
         # Calculate scores
-        scores = round.calculate_scores()
+        scores = round.calculate_scores(
+            receiving_vote_points=self.receiving_vote_points,
+            correct_vote_points=self.correct_vote_points,
+            correct_definition_points=self.correct_definition_points,
+        )
         self.logger.info(f"Round scores: {scores}")
         for player_id, score in scores.items():
             player = self.get_player_by_id(player_id)

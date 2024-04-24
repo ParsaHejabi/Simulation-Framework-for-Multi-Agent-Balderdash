@@ -49,7 +49,9 @@ class Round:
             for index, player_id in enumerate(self.definitions_permutation)
         ]
 
-    def calculate_scores(self) -> dict:
+    def calculate_scores(
+        self, receiving_vote_points: int, correct_vote_points: int, correct_definition_points: int
+    ) -> dict:
         self.logger.info("Calculating scores")
         scores = {}
         for player_id in self.player_definitions.keys():
@@ -57,14 +59,14 @@ class Round:
 
         for player_id, target_player_id in self.votes.items():
             if target_player_id == -1:
-                scores[player_id] += 5
+                scores[player_id] += correct_vote_points
             else:
-                scores[target_player_id] += 1
+                scores[target_player_id] += receiving_vote_points
 
         # Assign scores to players
         for player_id, (definition, judge_decision) in self.player_definitions.items():
             if judge_decision:
-                scores[player_id] += 6
+                scores[player_id] += correct_definition_points
 
         self.logger.info(f"Calculated scores: {scores}")
         self.scores = scores

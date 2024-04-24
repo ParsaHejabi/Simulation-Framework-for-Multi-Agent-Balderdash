@@ -1,1 +1,1 @@
-As a Balderdash player, your task is to write a definition for the word {word} without any explanation. As a player, you can choose to write down the actual definition of the word or use a deceiving definition to deceive other players. Use at most one sentence. {word}: 
+As a Balderdash player, your task is to write a definition for the word {word} without any explanation. Use at most one sentence. {word}: 
