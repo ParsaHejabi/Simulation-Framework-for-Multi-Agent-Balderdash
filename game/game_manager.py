@@ -19,6 +19,8 @@ class GameManager:
         db_connection_string: str,
         game_description: str,
         random_seed: int,
+        llms_temperature: float,
+        history_window_size: int,
         judge_llm_model_name: str = LLM_MODEL,
     ) -> None:
         self.logger = setup_logger("game_manager", "logs/game_manager.log")
@@ -34,10 +36,13 @@ class GameManager:
             game_description=game_description,
             number_of_rounds=NUM_ROUNDS,
             judge_llm_model_name=judge_llm_model_name,
+            random_seed=random_seed,
         )
         self.db.insert_game(self.game.__dict__)
         self.random_seed = random_seed
         self.set_random_seed(self.random_seed)
+        self.llms_temperature = llms_temperature
+        self.history_window_size = history_window_size
         self.judge_llm = self.get_or_load_llm(judge_llm_model_name)
 
     def set_random_seed(self, random_seed: int) -> None:
@@ -46,7 +51,7 @@ class GameManager:
     def get_or_load_llm(self, model_name: str) -> LLM:
         if model_name not in self.llms:
             self.logger.info(f"Loading LLM: {model_name} on device: {self.device}")
-            self.llms[model_name] = LLM(self.device, model_name)
+            self.llms[model_name] = LLM(device=self.device, model_name=model_name, temp=self.llms_temperature)
         return self.llms[model_name]
 
     def create_player(self, name: str, model_name: Optional[str] = None) -> None:
@@ -119,8 +124,8 @@ class GameManager:
 
         return round_winners_strategies
 
-    def get_player_history_csv(self, player_id: int) -> str:
-        player_rounds = self.db.get_player_rounds(player_id)
+    def get_player_history_csv(self, player_id: int, window_size: int) -> str:
+        player_rounds = self.db.get_player_rounds(player_id=player_id, window_size=window_size)
         history = []
         for round in player_rounds:
             round_id = round["round_id"]
@@ -138,6 +143,18 @@ class GameManager:
                 )
                 deception_ratio = number_of_received_votes / len(round["votes"])
             round_winners_strategies = self.get_round_winners_strategies(round)
+            # rank_among_players is an integer indicating your rank among all players up to that round. It can be calculated using self.players list and each player.score attribute.
+            # If players have the same score, they should have the same rank.
+            rank_among_players = (
+                len(
+                    [
+                        player
+                        for player in self.players
+                        if player.score > self.get_player_by_id(player_id).score
+                    ]
+                )
+                + 1
+            )
             history.append(
                 {
                     "round_id": round_id,
@@ -148,6 +165,7 @@ class GameManager:
                     "guessed_correct_definiton": guessed_correct_definiton,
                     "deception_ratio": deception_ratio,
                     "round_winners_strategies": round_winners_strategies,
+                    "rank_among_players": rank_among_players,
                 }
             )
 
@@ -171,7 +189,10 @@ class GameManager:
             generate_definition_messages = [{"role": "system", "content": game_rules_prompt_template}]
             with open("prompts/history.txt", "r") as history_prompt_template_file:
                 history_prompt_template = history_prompt_template_file.read()
-                history_csv = self.get_player_history_csv(player.player_id)
+                history_csv = self.get_player_history_csv(
+                    player_id=player.player_id,
+                    window_size=self.history_window_size,
+                )
                 history_prompt = history_prompt_template.format(history_csv=history_csv)
             with open("prompts/generate_definition.txt", "r") as generate_definition_prompt_template_file:
                 generate_definition_prompt_template = generate_definition_prompt_template_file.read()
@@ -210,7 +231,9 @@ class GameManager:
             vote_definition_messages = [{"role": "system", "content": game_rules_prompt_template}]
             with open("prompts/history.txt", "r") as history_prompt_template_file:
                 history_prompt_template = history_prompt_template_file.read()
-                history_csv = self.get_player_history_csv(player.player_id)
+                history_csv = self.get_player_history_csv(
+                    player_id=player.player_id, window_size=self.history_window_size
+                )
                 history_prompt = history_prompt_template.format(history_csv=history_csv)
             with open("prompts/vote_definition.txt", "r") as vote_definition_prompt_template_file:
                 vote_definition_prompt_template = vote_definition_prompt_template_file.read()

@@ -7,6 +7,7 @@ wrote_true_definition: A boolean showing whether your definition is semantically
 guessed_correct_definiton: A boolean showing whether you have correctly guessed the true dictionary definition in the voting phase.
 deception_ratio: The ratio of players who voted to your definition excluding yourself in the voting phase devided by the total number of players who participated in the voting phase. If the `wrote_true_definition` is true, then this value will be -1.
 round_winners_strategies: A list of tuples containing the definition and that definition's outcome for each of the player(s) who got the highest scores in the corresponding round, in the format of [(definition_round_id, outcome_for_definition_round_id)].
+rank_among_players: An integer indicating your rank among all players up to that round.
 ```
 {history_csv}
 ```

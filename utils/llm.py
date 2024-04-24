@@ -7,9 +7,7 @@ import os
 
 
 class LLM:
-    def __init__(
-        self, device: torch.device, model_name: str = LLM_MODEL, temp: float = 0.7, max_tokens: int = 512
-    ):
+    def __init__(self, device: torch.device, temp: float, model_name: str = LLM_MODEL, max_tokens: int = 512):
         self.logger = setup_logger("llm", "logs/llm.log")
         self.model_name = model_name
         self.device = device

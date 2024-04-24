@@ -38,11 +38,17 @@ class MongoDB:
         game_data_for_db.pop("logger", None)
         self.db["games"].insert_one(game_data_for_db)
 
-    def get_player_rounds(self, player_id: int) -> list:
+    def get_player_rounds(self, player_id: int, window_size: int) -> list:
         """
-        Rounds collection in the mongodb has a column called players which is an array of player_ids sorted by the game_id and round_id columns.
+        Rounds collection in the mongodb has a column called players which is an array of player_ids sorted by the round_id columns.
+        This function sorts the rounds by round_id and returns the rounds where the player_id is in the players array for the last window_size games.
+        if window_size is -1, it returns all the rounds where the player_id is in the players array.
         """
-        return list(self.db["rounds"].find({"players": player_id}).sort([("game_id", 1), ("round_id", 1)]))
+        if window_size != -1:
+            return list(
+                self.db["rounds"].find({"players": player_id}).sort([("round_id", -1)]).limit(window_size)
+            )[::-1]
+        return list(self.db["rounds"].find({"players": player_id}).sort([("round_id", 1)]))
 
     def insert_round(self, round_data: dict) -> None:
         # Check if the round_data has "logger" key, drop it
