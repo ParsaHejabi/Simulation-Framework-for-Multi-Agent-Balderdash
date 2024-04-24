@@ -63,21 +63,26 @@ class GameManager:
         self.players.append(player)
         self.db.insert_player(player.__dict__)
 
-    def load_word_data(self, file_path: str) -> None:
+    def load_word_data(self, file_path: str, filter_known_words: bool = False) -> None:
         self.logger.info(f"Loading word data from: {file_path}")
-        self.word_data = []
-        data = pd.read_csv(file_path)
+        self.word_data = {}
+        data = pd.read_csv(file_path, engine="python")
+        if filter_known_words:
+            # filter the data using the column "llm_knows_word" in the dataframe and keep only the rows where the value is True
+            data = data[data["llm_knows_word"] == True].reset_index(drop=True)
+            self.logger.info(f"Filtered known words and loaded {len(data)} words")
+        data = data.sample(self.game.number_of_rounds, random_state=self.random_seed)
         for _, row in data.iterrows():
-            word = row["words"]
+            word = row["words"].strip().lower()
             definition = literal_eval(row["def"])[0].strip()
             pos = literal_eval(row["POS"])[0]
             if pos:
                 pos = pos.strip()
-            self.word_data.append((word, definition, pos))
+            self.word_data[len(self.word_data) + 1] = {"word": word, "def": definition, "POS": pos}
 
-    def start_game(self, words_file: str = "data/words.csv") -> None:
+    def start_game(self, words_file: str, filter_known_words: bool = False) -> None:
         self.logger.info("Starting the game")
-        self.load_word_data(words_file)
+        self.load_word_data(words_file, filter_known_words=filter_known_words)
         self.logger.info(
             f"Loaded {len(self.word_data)} words and playing {self.game.number_of_rounds} rounds"
         )
@@ -175,7 +180,11 @@ class GameManager:
     def play_round(self, game_id: int, round_id: int) -> None:
         self.logger.info(f"Playing round: {round_id}")
         # Select a random word and its definition
-        word, correct_definition, pos = self.get_random_word()
+        word, correct_definition, pos = (
+            self.word_data[round_id]["word"],
+            self.word_data[round_id]["def"],
+            self.word_data[round_id]["POS"],
+        )
         self.logger.info(f"Selected word: {word} with definition: {correct_definition}, and POS: {pos}")
 
         # Create a new round
@@ -264,9 +273,6 @@ class GameManager:
 
         # Store round data in the database
         self.db.insert_round(round.__dict__)
-
-    def get_random_word(self) -> tuple:
-        return random.choice(self.word_data)
 
     def get_player_by_id(self, player_id: int) -> Player:
         for player in self.players:
