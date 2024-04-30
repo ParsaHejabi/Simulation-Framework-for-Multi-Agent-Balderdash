@@ -1,13 +1,12 @@
 from utils.logger import setup_logger
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-from utils.config import LLM_MODEL
 import torch
 from typing import List
 import os
 
 
 class LLM:
-    def __init__(self, device: torch.device, temp: float, model_name: str = LLM_MODEL, max_tokens: int = 512):
+    def __init__(self, device: torch.device, temp: float, model_name: str, max_tokens: int = 512):
         self.logger = setup_logger("llm", "logs/llm.log")
         self.model_name = model_name
         self.device = device
@@ -104,6 +103,9 @@ class LLM:
             # if output starts with a number, convert to int and return
             if model_output[0].isdigit():
                 return int(model_output[0])
+            # if output has a single digit in it, find it using regex and return it
+            elif any(char.isdigit() for char in model_output):
+                return int("".join(filter(str.isdigit, model_output)))
             else:
                 # raise ValueError
                 raise ValueError()

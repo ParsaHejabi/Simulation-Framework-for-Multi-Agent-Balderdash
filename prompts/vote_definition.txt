@@ -6,4 +6,4 @@ Definitions:
 ```
 {definitions}
 ```
-As a Balderdash player, your task is to choose the actual dictionary definition and write the index of it without any explanation. Use at most one character which is a single digit. Your vote index: 
+As a Balderdash player, your task is to choose the actual dictionary definition index among {all_indexes_excluding_player} and write it without any explanation. Use at most one character which is a single digit. Your vote index: 

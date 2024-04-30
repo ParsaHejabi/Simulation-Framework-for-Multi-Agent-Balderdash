@@ -2,7 +2,6 @@
 from utils.llm import LLM
 import pandas as pd
 import os
-from utils.config import LLM_MODEL
 import torch
 from ast import literal_eval
 from utils.logger import setup_logger
@@ -36,8 +35,8 @@ if __name__ == "__main__":
     )
     device = get_device()
     logger.info(f"Device: {device}")
-    llm_model_name = LLM_MODEL
-    judge_llm_model_name = LLM_MODEL
+    llm_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+    judge_llm_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 
     llm = get_or_load_llm(llm_model_name, device)
     judge_llm = get_or_load_llm(judge_llm_model_name, device)

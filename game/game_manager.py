@@ -2,10 +2,6 @@ from game.player import Player
 from game.round import Round
 from game.game import Game
 from database.mongodb import MongoDB
-from utils.config import (
-    NUM_ROUNDS,
-    LLM_MODEL,
-)
 import random
 from utils.logger import setup_logger
 import pandas as pd
@@ -27,7 +23,10 @@ class GameManager:
         receiving_vote_points: int,
         correct_vote_points: int,
         correct_definition_points: int,
-        judge_llm_model_name: str = LLM_MODEL,
+        num_rounds: int,
+        judge_llm_model_name: str,
+        words_file: str,
+        filter_words: str,
     ) -> None:
         self.logger = setup_logger("game_manager", "logs/game_manager.log")
         self.logger.info("Initializing GameManager")
@@ -40,15 +39,20 @@ class GameManager:
         self.receiving_vote_points = receiving_vote_points
         self.correct_vote_points = correct_vote_points
         self.correct_definition_points = correct_definition_points
+        self.filter_words = filter_words
         self.game = Game(
             self.db.get_last_game_id() + 1,
             game_description=game_description,
-            number_of_rounds=NUM_ROUNDS,
+            number_of_rounds=num_rounds,
             judge_llm_model_name=judge_llm_model_name,
             random_seed=random_seed,
             receiving_vote_points=self.receiving_vote_points,
             correct_vote_points=self.correct_vote_points,
             correct_definition_points=self.correct_definition_points,
+            history_window_size=history_window_size,
+            llms_temperature=llms_temperature,
+            words_file=words_file,
+            filter_words=filter_words,
         )
         self.db.insert_game(self.game.__dict__)
         self.random_seed = random_seed
@@ -79,26 +83,34 @@ class GameManager:
         self.logger.info(f"Loading word data from: {file_path}")
         self.word_data = {}
         data = pd.read_csv(file_path, engine="python")
-        if filter_known_words == "known":
-            # filter the data using the column "llm_knows_word" in the dataframe and keep only the rows where the value is True
-            data = data[data["llm_knows_word"] == True].reset_index(drop=True)
-            self.logger.info(f"Filtered known words and loaded {len(data)} words")
-        elif filter_known_words == "unknown":
-            # filter the data using the column "llm_knows_word" in the dataframe and keep only the rows where the value is False
-            data = data[data["llm_knows_word"] == False].reset_index(drop=True)
-            self.logger.info(f"Filtered unknown words and loaded {len(data)} words")
+        # if data contains a column "llm_knows_word" then filter the data based on the value of this column
+        if "llm_knows_word" in data.columns:
+            if filter_known_words == "known":
+                # filter the data using the column "llm_knows_word" in the dataframe and keep only the rows where the value is True
+                data = data[data["llm_knows_word"] == True].reset_index(drop=True)
+                self.logger.info(f"Filtered known words and loaded {len(data)} words")
+            elif filter_known_words == "unknown":
+                # filter the data using the column "llm_knows_word" in the dataframe and keep only the rows where the value is False
+                data = data[data["llm_knows_word"] == False].reset_index(drop=True)
+                self.logger.info(f"Filtered unknown words and loaded {len(data)} words")
         data = data.sample(self.game.number_of_rounds, random_state=self.random_seed)
         for _, row in data.iterrows():
             word = row["words"].strip().lower()
-            definition = literal_eval(row["def"])[0].strip()
-            pos = literal_eval(row["POS"])[0]
+            # if row["def"] first character starts with '[' then use literal_eval to convert it to a list
+            # if not, just strip the string
+            if row["def"].strip()[0] == "[":
+                definition = literal_eval(row["def"])[0].strip()
+                pos = literal_eval(row["POS"])[0]
+            else:
+                definition = row["def"].strip()
+                pos = row["POS"]
             if pos:
                 pos = pos.strip()
             self.word_data[len(self.word_data) + 1] = {"word": word, "def": definition, "POS": pos}
 
-    def start_game(self, words_file: str, filter_known_words: str) -> None:
+    def start_game(self, words_file: str) -> None:
         self.logger.info("Starting the game")
-        self.load_word_data(words_file, filter_known_words=filter_known_words)
+        self.load_word_data(words_file, filter_known_words=self.filter_words)
         self.logger.info(
             f"Loaded {len(self.word_data)} words and playing {self.game.number_of_rounds} rounds"
         )
@@ -191,7 +203,7 @@ class GameManager:
             )
 
         df = pd.DataFrame(history)
-        return df.to_csv()
+        return df.to_csv(index=False)
 
     def play_round(self, game_id: int, round_id: int) -> None:
         self.logger.info(f"Playing round: {round_id}")
@@ -267,12 +279,23 @@ class GameManager:
                     player_id=player.player_id, window_size=self.history_window_size
                 )
                 history_prompt = history_prompt_template.format(history_csv=history_csv)
+
+            # get the index of this player's definition in the round.definitions_permutation list
+            player_index_in_the_permuted_list = round.definitions_permutation.index(player.player_id)
+
+            # create a list of all indexes excluding the player's index
+            all_indexes_excluding_player = [
+                str(index + 1)
+                for index in range(len(round.definitions_permutation))
+                if index != player_index_in_the_permuted_list
+            ]
             with open("prompts/vote_definition.txt", "r") as vote_definition_prompt_template_file:
                 vote_definition_prompt_template = vote_definition_prompt_template_file.read()
                 vote_definition_prompt = vote_definition_prompt_template.format(
                     word=word,
                     definition=round.player_definitions[player.player_id][0],
                     definitions="\n".join(eligible_voting_players_definitions),
+                    all_indexes_excluding_player=", ".join(all_indexes_excluding_player),
                 )
             vote_definition_messages.append(
                 {"role": "user", "content": "\n".join([history_prompt, vote_definition_prompt])}

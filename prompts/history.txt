@@ -1,4 +1,4 @@
-Your performance history in the previous rounds will be provided in CSV format between triple backticks. Columns descriptions of the CSV:
+Your performance history in the previous rounds will be provided, helping you to learn from past performances, better understand your opponents' behaviors, and adapt your strategies to maximize your scoring potential in future rounds. History is provided in CSV format between triple backticks. Columns descriptions of the CSV:
 round_id: The id for the corresponding round.
 word: The announced word in that round.
 definition: The true dictionary definition of the announced word.

@@ -16,11 +16,14 @@ def main() -> None:
     parser.add_argument("--correct_definition_points", type=int, help="Correct definition points")
     parser.add_argument("--receiving_vote_points", type=int, help="Receiving vote points")
     parser.add_argument("--llms_temperature", type=float, help="LLMs temperature")
+    parser.add_argument("--num_rounds", type=int, help="Number of rounds")
+    parser.add_argument("--words_file", type=str, help="Words file")
+    parser.add_argument("--filter_words", type=str, help="Filter words", choices=["known", "unknown", "all"])
     args = parser.parse_args()
 
     game_manager = GameManager(
-        os.getenv("MONGODB_CONNECTION_STRING"),
-        game_description=f"modified prompts for definition and voting, with unlimited history, default rules, unknown words, no communication, no seed stories",
+        db_connection_string=os.getenv("MONGODB_CONNECTION_STRING"),
+        game_description=f"modified prompts for system message, history and voting, no communication, no seed stories",
         random_seed=args.random_seed,
         judge_llm_model_name=args.judge_llm_model,
         llms_temperature=args.llms_temperature,
@@ -28,6 +31,9 @@ def main() -> None:
         receiving_vote_points=args.receiving_vote_points,
         correct_vote_points=args.correct_vote_points,
         correct_definition_points=args.correct_definition_points,
+        num_rounds=args.num_rounds,
+        words_file=args.words_file,
+        filter_words=args.filter_words,
     )
 
     # Create players
@@ -36,10 +42,7 @@ def main() -> None:
     game_manager.create_player(f"Player 3 - {args.player_llm_model}", args.player_llm_model)
 
     # Start the game
-    game_manager.start_game(
-        os.path.join("data", "meta-llama_Meta-Llama-3-8B-Instruct_balderdash_words1.csv"),
-        filter_known_words="unknown",
-    )
+    game_manager.start_game(os.path.join("data", args.words_file))
 
 
 if __name__ == "__main__":
