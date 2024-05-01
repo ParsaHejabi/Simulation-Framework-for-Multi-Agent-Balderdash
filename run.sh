@@ -11,7 +11,7 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py \
     --correct_definition_points 6 \
     --receiving_vote_points 1 \
     --llms_temperature 0.9 \
-    --num_rounds 50 \
+    --num_rounds 5 \
     --words_file "basic_english_words.csv" \
     --filter_words "all"
     # --words_file "english_frequent_words.csv"

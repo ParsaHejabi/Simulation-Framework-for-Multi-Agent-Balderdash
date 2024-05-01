@@ -22,11 +22,17 @@ class Round:
         self.definitions_permutation = []
         self.votes = {}
 
-    def add_player_definition(self, player_id: int, definition: str, judge_decision: bool) -> None:
+    def add_player_definition(
+        self, player_id: int, definition: str, judge_decision: bool, llm_knows_one_of_the_defs: bool
+    ) -> None:
         self.logger.info(
-            f"Adding player definition: {player_id} - {definition}, judge decision: {judge_decision}"
+            f"Adding player definition: {player_id} - {definition}, judge decision: {judge_decision}, Does LLM know at least one of the definitions: {llm_knows_one_of_the_defs}"
         )
-        self.player_definitions[player_id] = (definition, judge_decision)
+        self.player_definitions[player_id] = {
+            "definition": definition,
+            "judge_decision": judge_decision,
+            "llm_knows_one_of_the_defs": llm_knows_one_of_the_defs,
+        }
 
     def add_vote(self, player_id: int, target_permuted_player_id: int) -> None:
         self.logger.info(f"Adding vote: {player_id} - {target_permuted_player_id}")
@@ -36,9 +42,9 @@ class Round:
     def get_eligible_voting_players_definitions(self) -> List[str]:
         self.logger.info("Getting eligible voting players definitions")
         all_definitions = {
-            player_id: definition
-            for player_id, (definition, judge_decision) in self.player_definitions.items()
-            if not judge_decision
+            player_id: player_definition_dict["definition"]
+            for player_id, player_definition_dict in self.player_definitions.items()
+            if not player_definition_dict["judge_decision"]
         }
         # Add the correct definition to the list of definitions
         all_definitions[-1] = self.correct_definition
@@ -64,8 +70,8 @@ class Round:
                 scores[target_player_id] += receiving_vote_points
 
         # Assign scores to players
-        for player_id, (definition, judge_decision) in self.player_definitions.items():
-            if judge_decision:
+        for player_id, player_definition_dict in self.player_definitions.items():
+            if player_definition_dict["judge_decision"]:
                 scores[player_id] += correct_definition_points
 
         self.logger.info(f"Calculated scores: {scores}")

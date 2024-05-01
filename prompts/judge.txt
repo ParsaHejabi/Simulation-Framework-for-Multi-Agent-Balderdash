@@ -1,1 +1,0 @@
-You are a Dasher in Balderdash game. Your task is to judge whether the received definition is correct or not. Give your answer as a single word, either "true" or "false". You receive the word {word} defined as: {correct_definition}. Is the following sentence also a true definition of {word}: {definition}?

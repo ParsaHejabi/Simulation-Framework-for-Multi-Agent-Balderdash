@@ -118,3 +118,11 @@ class LLM:
         model_output = self.generate_answer(messages)
         self.logger.info(f"Model output for judge decision: {model_output}")
         return model_output.strip().lower()[0:4] == "true"
+
+    def know_one_of_the_definitions(self, word: str, messages: List[dict]) -> bool:
+        self.logger.info(
+            f"Checking if LLM knows one of the definitions for word: {word} using model: {self.model_name}"
+        )
+        model_output = self.generate_answer(messages)
+        self.logger.info(f"Model output for knowing one of the definitions: {model_output}")
+        return model_output.strip().lower()[0:4] == "true"

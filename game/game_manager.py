@@ -99,14 +99,29 @@ class GameManager:
             # if row["def"] first character starts with '[' then use literal_eval to convert it to a list
             # if not, just strip the string
             if row["def"].strip()[0] == "[":
-                definition = literal_eval(row["def"])[0].strip()
-                pos = literal_eval(row["POS"])[0]
+                definition = literal_eval(row["def"])
+                pos = literal_eval(row["POS"])
+                assert len(definition) == len(pos)
+                # for each definition strip the string
+                definition = [defn.strip() for defn in definition]
+                pos = [p.strip() for p in pos]
+                self.word_data[len(self.word_data) + 1] = {
+                    "word": word,
+                    "def": definition,
+                    "POS": pos,
+                    "type": "multiple_definitions",
+                }
             else:
                 definition = row["def"].strip()
                 pos = row["POS"]
-            if pos:
-                pos = pos.strip()
-            self.word_data[len(self.word_data) + 1] = {"word": word, "def": definition, "POS": pos}
+                if pos:
+                    pos = pos.strip()
+                self.word_data[len(self.word_data) + 1] = {
+                    "word": word,
+                    "def": definition,
+                    "POS": pos,
+                    "type": "single_definition",
+                }
 
     def start_game(self, words_file: str) -> None:
         self.logger.info("Starting the game")
@@ -139,8 +154,10 @@ class GameManager:
         round_winners = [player_id for player_id, score in scores.items() if score == max_score]
         round_winners_strategies = []
         for player_id in round_winners:
-            player_definition = round["player_definitions"][str(player_id)][0]
-            is_true_definition = str(round["player_definitions"][str(player_id)][1]).lower() == "true"
+            player_definition = round["player_definitions"][str(player_id)]["definition"]
+            is_true_definition = (
+                str(round["player_definitions"][str(player_id)]["judge_decision"]).lower() == "true"
+            )
             if is_true_definition:
                 outcome = f"This definition was semantically equal to the true dictionary definition"
             else:
@@ -164,8 +181,8 @@ class GameManager:
             round_id = round["round_id"]
             word = round["word"]
             definition = round["correct_definition"]
-            generated_definition = round["player_definitions"][str(player_id)][0]
-            wrote_true_definition = round["player_definitions"][str(player_id)][1]
+            generated_definition = round["player_definitions"][str(player_id)]["definition"]
+            wrote_true_definition = round["player_definitions"][str(player_id)]["judge_decision"]
             if wrote_true_definition:
                 guessed_correct_definiton = False
                 deception_ratio = -1
@@ -208,11 +225,17 @@ class GameManager:
     def play_round(self, game_id: int, round_id: int) -> None:
         self.logger.info(f"Playing round: {round_id}")
         # Select a random word and its definition
-        word, correct_definition, pos = (
+        word, all_correct_definitions, all_poss = (
             self.word_data[round_id]["word"],
             self.word_data[round_id]["def"],
             self.word_data[round_id]["POS"],
         )
+        if self.word_data[round_id]["type"] == "single_definition":
+            correct_definition = all_correct_definitions
+            pos = all_poss
+        else:
+            correct_definition = all_correct_definitions[0]
+            pos = all_poss[0]
         self.logger.info(f"Selected word: {word} with definition: {correct_definition}, and POS: {pos}")
 
         # Create a new round
@@ -227,6 +250,9 @@ class GameManager:
                 correct_vote_points=self.correct_vote_points,
                 correct_definition_points=self.correct_definition_points,
             )
+
+        with open("prompts/system_judge.txt", "r") as system_judge_prompt_template_file:
+            system_judge_prompt_template = system_judge_prompt_template_file.read()
 
         # Generate definitions from players
         for player in self.players:
@@ -249,25 +275,49 @@ class GameManager:
                 f"Player {player.player_id} - {player.name} defined the word {word} as: {definition}"
             )
 
-            judge_decision_messages = []
-            with open("prompts/judge.txt", "r") as judge_prompt_template_file:
-                judge_prompt_template = judge_prompt_template_file.read()
-                judge_prompt = judge_prompt_template.format(
+            judge_decision_messages = [{"role": "system", "content": system_judge_prompt_template}]
+            with open("prompts/user_judge.txt", "r") as user_judge_prompt_template_file:
+                user_judge_prompt_template = user_judge_prompt_template_file.read()
+                user_judge_prompt = user_judge_prompt_template.format(
                     word=word, correct_definition=correct_definition, definition=definition
                 )
-            judge_decision_messages.append({"role": "user", "content": judge_prompt})
-            judge_decision = self.judge_llm.judge_decision(word, judge_decision_messages)
+            judge_decision_messages.append({"role": "user", "content": user_judge_prompt})
+            # First check if the player knows the meaning of the main word used in this round
+            judge_decision_on_round_word = self.judge_llm.judge_decision(word, judge_decision_messages)
             self.logger.info(
-                f"Judge decision for player {player.player_id} - {player.name} with definition: {definition} is: {judge_decision}"
+                f"Judge decision for player {player.player_id} - {player.name} with definition: {definition} is: {judge_decision_on_round_word}"
             )
-            round.add_player_definition(player.player_id, definition, judge_decision=judge_decision)
+
+            llm_knows_one_of_the_defs = False
+            if judge_decision_on_round_word:
+                llm_knows_one_of_the_defs = True
+            else:
+                for another_correct_def in all_correct_definitions:
+                    judge_decision_messages = [{"role": "system", "content": system_judge_prompt_template}]
+                    user_judge_prompt = user_judge_prompt_template.format(
+                        word=word, correct_definition=another_correct_def, definition=definition
+                    )
+                    judge_decision_messages.append({"role": "user", "content": user_judge_prompt})
+                    judge_decision_on_another_correct_def = self.judge_llm.judge_decision(
+                        word, judge_decision_messages
+                    )
+                    if judge_decision_on_another_correct_def:
+                        llm_knows_one_of_the_defs = True
+                        break
+
+            round.add_player_definition(
+                player.player_id,
+                definition,
+                judge_decision=judge_decision_on_round_word,
+                llm_knows_one_of_the_defs=llm_knows_one_of_the_defs,
+            )
 
         eligible_voting_players_definitions = round.get_eligible_voting_players_definitions()
         self.logger.info(f"Eligible voting players definitions: {eligible_voting_players_definitions}")
         # Perform voting
         for player in self.players:
             # Skip players who defined the word correctly
-            if round.player_definitions[player.player_id][1]:
+            if round.player_definitions[player.player_id]["judge_decision"]:
                 self.logger.info(
                     f"Skipping player {player.player_id} - {player.name} from voting as they defined the word correctly"
                 )
@@ -289,13 +339,18 @@ class GameManager:
                 for index in range(len(round.definitions_permutation))
                 if index != player_index_in_the_permuted_list
             ]
+
+            if len(all_indexes_excluding_player) == 1:
+                all_indexes_excluding_player_text = f"which is {all_indexes_excluding_player[0]}"
+            else:
+                all_indexes_excluding_player_text = f"among {', '.join(all_indexes_excluding_player)}"
             with open("prompts/vote_definition.txt", "r") as vote_definition_prompt_template_file:
                 vote_definition_prompt_template = vote_definition_prompt_template_file.read()
                 vote_definition_prompt = vote_definition_prompt_template.format(
                     word=word,
-                    definition=round.player_definitions[player.player_id][0],
+                    definition=round.player_definitions[player.player_id]["definition"],
                     definitions="\n".join(eligible_voting_players_definitions),
-                    all_indexes_excluding_player=", ".join(all_indexes_excluding_player),
+                    all_indexes_excluding_player=all_indexes_excluding_player_text,
                 )
             vote_definition_messages.append(
                 {"role": "user", "content": "\n".join([history_prompt, vote_definition_prompt])}
