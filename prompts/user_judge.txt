@@ -1,0 +1,1 @@
+You receive the word: "{word}", the reference dictionary definition: "{correct_definition}", and assistant's definition: "{definition}". Give your answer as a single word, either "true" or "false". Your verdict is: 
