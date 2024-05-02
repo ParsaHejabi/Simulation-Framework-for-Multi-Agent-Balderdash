@@ -101,10 +101,10 @@ class GameManager:
             if row["def"].strip()[0] == "[":
                 definition = literal_eval(row["def"])
                 pos = literal_eval(row["POS"])
-                assert len(definition) == len(pos)
+                # assert len(definition) == len(pos)
                 # for each definition strip the string
                 definition = [defn.strip() for defn in definition]
-                pos = [p.strip() for p in pos]
+                pos = [p.strip() for p in pos if p is not None]
                 self.word_data[len(self.word_data) + 1] = {
                     "word": word,
                     "def": definition,
@@ -344,12 +344,24 @@ class GameManager:
                 all_indexes_excluding_player_text = f"which is {all_indexes_excluding_player[0]}"
             else:
                 all_indexes_excluding_player_text = f"among {', '.join(all_indexes_excluding_player)}"
+
+            # find this player's definition in the eligible_voting_players_definitions list and remove it from the list
+            definitions_passed_for_voting = eligible_voting_players_definitions.copy()
+            # any element containing '. ' + this player's definition in the list is the player's definition
+            player_definition_index = [
+                index
+                for index, definition in enumerate(definitions_passed_for_voting)
+                if ". " + round.player_definitions[player.player_id]["definition"] in definition
+            ]
+            assert len(player_definition_index) == 1
+            player_definition_index = player_definition_index[0]
+            definitions_passed_for_voting.pop(player_definition_index)
             with open("prompts/vote_definition.txt", "r") as vote_definition_prompt_template_file:
                 vote_definition_prompt_template = vote_definition_prompt_template_file.read()
                 vote_definition_prompt = vote_definition_prompt_template.format(
                     word=word,
                     definition=round.player_definitions[player.player_id]["definition"],
-                    definitions="\n".join(eligible_voting_players_definitions),
+                    definitions="\n".join(definitions_passed_for_voting),
                     all_indexes_excluding_player=all_indexes_excluding_player_text,
                 )
             vote_definition_messages.append(
