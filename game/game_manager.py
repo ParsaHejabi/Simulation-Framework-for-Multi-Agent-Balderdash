@@ -232,18 +232,22 @@ class GameManager:
         )
         if self.word_data[round_id]["type"] == "single_definition":
             correct_definition = all_correct_definitions
-            pos = all_poss
+            if all_poss is None:
+                pos = "N/A"
+            else:
+                pos = all_poss
         else:
             correct_definition = all_correct_definitions[0]
-            pos = all_poss[0]
+            if len(all_poss) == 0 or all_poss[0] is None:
+                pos = "N/A"
+            else:
+                pos = all_poss[0]
         self.logger.info(f"Selected word: {word} with definition: {correct_definition}, and POS: {pos}")
 
         # Create a new round
         round = self.create_round(game_id, round_id, word, correct_definition, pos)
 
-        with open(
-            "prompts/default_game_rules_more_points_for_true_def_and_true_guess.txt", "r"
-        ) as game_rules_prompt_template_file:
+        with open("prompts/game_rules.txt", "r") as game_rules_prompt_template_file:
             game_rules_prompt_template = game_rules_prompt_template_file.read()
             game_rules_prompt = game_rules_prompt_template.format(
                 receiving_vote_points=self.receiving_vote_points,
@@ -264,11 +268,15 @@ class GameManager:
                     window_size=self.history_window_size,
                 )
                 history_prompt = history_prompt_template.format(history_csv=history_csv)
-            with open("prompts/generate_definition.txt", "r") as generate_definition_prompt_template_file:
-                generate_definition_prompt_template = generate_definition_prompt_template_file.read()
-                generate_definition_prompt = generate_definition_prompt_template.format(word=word)
+            with open(
+                "prompts/user_generate_definition.txt", "r"
+            ) as user_generate_definition_prompt_template_file:
+                user_generate_definition_prompt_template = (
+                    user_generate_definition_prompt_template_file.read()
+                )
+                user_generate_definition_prompt = user_generate_definition_prompt_template.format(word=word)
             generate_definition_messages.append(
-                {"role": "user", "content": "\n".join([history_prompt, generate_definition_prompt])}
+                {"role": "user", "content": "\n".join([history_prompt, user_generate_definition_prompt])}
             )
             definition = player.generate_definition(word, generate_definition_messages)
             self.logger.info(
@@ -347,15 +355,9 @@ class GameManager:
 
             # find this player's definition in the eligible_voting_players_definitions list and remove it from the list
             definitions_passed_for_voting = eligible_voting_players_definitions.copy()
-            # any element containing '. ' + this player's definition in the list is the player's definition
-            player_definition_index = [
-                index
-                for index, definition in enumerate(definitions_passed_for_voting)
-                if ". " + round.player_definitions[player.player_id]["definition"] in definition
-            ]
-            assert len(player_definition_index) == 1
-            player_definition_index = player_definition_index[0]
-            definitions_passed_for_voting.pop(player_definition_index)
+            # pop the player's definition from definitions_passed_for_voting.
+            # The player's definition is the one that starts with player_index_in_the_permuted_list + 1
+            definitions_passed_for_voting.pop(player_index_in_the_permuted_list)
             with open("prompts/vote_definition.txt", "r") as vote_definition_prompt_template_file:
                 vote_definition_prompt_template = vote_definition_prompt_template_file.read()
                 vote_definition_prompt = vote_definition_prompt_template.format(
@@ -368,7 +370,6 @@ class GameManager:
                 {"role": "user", "content": "\n".join([history_prompt, vote_definition_prompt])}
             )
             target_permuted_player_id = player.vote_definition(
-                eligible_voting_players_definitions,
                 vote_definition_messages,
             )
             self.logger.info(

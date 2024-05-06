@@ -93,10 +93,11 @@ class LLM:
         self.logger.info(f"Generating definition for word: {word} using model: {self.model_name}")
         model_output = self.generate_answer(messages)
         self.logger.info(f"Model output for generating definition: {model_output}")
-        return model_output.strip()
+        # If model_output has double quotes at the start and end, remove them
+        return model_output.strip().strip('"')
 
-    def vote_definition(self, definitions, messages: List[dict]) -> int:
-        self.logger.info(f"Voting on definitions: {definitions} using model: {self.model_name}")
+    def vote_definition(self, messages: List[dict]) -> int:
+        self.logger.info(f"Voting on definitions using model: {self.model_name}")
         model_output = self.generate_answer(messages)
         self.logger.info(f"Model output for voting a definition: {model_output}")
         try:

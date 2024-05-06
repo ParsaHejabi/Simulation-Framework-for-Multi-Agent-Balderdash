@@ -20,6 +20,6 @@ class Player:
         self.logger.info(f"Generating definition for word: {word} for player: {self.player_id} - {self.name}")
         return self.llm.generate_definition(word, messages)
 
-    def vote_definition(self, definitions, messages: List[dict]) -> int:
+    def vote_definition(self, messages: List[dict]) -> int:
         self.logger.info(f"Voting on definitions for player: {self.player_id} - {self.name}")
-        return self.llm.vote_definition(definitions, messages)
+        return self.llm.vote_definition(messages)

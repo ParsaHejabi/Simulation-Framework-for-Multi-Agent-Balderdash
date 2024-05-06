@@ -23,7 +23,7 @@ def main() -> None:
 
     game_manager = GameManager(
         db_connection_string=os.getenv("MONGODB_CONNECTION_STRING"),
-        game_description=f"modified prompts for system message, history and voting, no communication, no seed stories",
+        game_description=f"Correct definition rule experiment with default scoring rules but correct definition score changing from 0 to 6 and five different seeds, no communication, no seed stories.",
         random_seed=args.random_seed,
         judge_llm_model_name=args.judge_llm_model,
         llms_temperature=args.llms_temperature,
