@@ -37,9 +37,9 @@ def main() -> None:
     )
 
     # Create players
-    game_manager.create_player(f"Player 1 - {args.player_llm_model}", args.player_llm_model)
-    game_manager.create_player(f"Player 2 - {args.player_llm_model}", args.player_llm_model)
-    game_manager.create_player(f"Player 3 - {args.player_llm_model}", args.player_llm_model)
+    game_manager.create_player(f"Player 1", game_manager.game.game_id, args.player_llm_model)
+    game_manager.create_player(f"Player 2", game_manager.game.game_id, args.player_llm_model)
+    game_manager.create_player(f"Player 3", game_manager.game.game_id, args.player_llm_model)
 
     # Start the game
     game_manager.start_game(os.path.join("data", args.words_file))
