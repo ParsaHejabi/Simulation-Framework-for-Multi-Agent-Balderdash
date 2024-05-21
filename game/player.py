@@ -4,10 +4,12 @@ from typing import List
 
 
 class Player:
-    def __init__(self, player_id: int, name: str, llm: LLM) -> None:
+    def __init__(self, player_id: int, name: str, game_id, llm: LLM) -> None:
         self.logger = setup_logger(f"player_{player_id}", f"logs/player_{player_id}.log")
         self.logger.info(f"Initializing Player: {player_id} - Name: {name} - LLM: {llm.model_name}")
         self.player_id = player_id
+        self.llm_name = llm.model_name
+        self.game_id = game_id
         self.name = name
         self.score = 0
         self.llm = llm

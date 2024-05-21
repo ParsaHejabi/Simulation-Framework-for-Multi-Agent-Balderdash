@@ -70,12 +70,12 @@ class GameManager:
             self.llms[model_name] = LLM(device=self.device, model_name=model_name, temp=self.llms_temperature)
         return self.llms[model_name]
 
-    def create_player(self, name: str, model_name: Optional[str] = None) -> None:
+    def create_player(self, name: str, game_id: int, model_name: Optional[str] = None) -> None:
         llm = self.get_or_load_llm(model_name)
         last_player_id = self.db.get_last_player_id()
         player_id = last_player_id + 1
         self.logger.info(f"Creating player: {player_id} - {name} with LLM: {llm.model_name}")
-        player = Player(player_id, name, llm)
+        player = Player(player_id, name, game_id, llm)
         self.players.append(player)
         self.db.insert_player(player.__dict__)
 
