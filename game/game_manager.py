@@ -25,15 +25,16 @@ class GameManager:
         correct_definition_points: int,
         num_rounds: int,
         judge_llm_model_name: str,
+        judge_llm_gpu: int,
         words_file: str,
         filter_words: str,
+        dry_run: bool = False,
     ) -> None:
-        self.logger = setup_logger("game_manager", "logs/game_manager.log")
+        self.dry_run = dry_run
+        self.logger = setup_logger("game_manager", "logs/game_manager.log", verbose=self.dry_run)
         self.logger.info("Initializing GameManager")
         self.db = MongoDB(db_connection_string)
         self.players = []
-        self.device = self.get_device()
-        self.logger.info(f"Using device: {self.device}")
 
         self.llms = {}
         self.receiving_vote_points = receiving_vote_points
@@ -54,30 +55,41 @@ class GameManager:
             words_file=words_file,
             filter_words=filter_words,
         )
-        self.db.insert_game(self.game.__dict__)
+        # If it is not a dry run, save the game to the database
+        if not self.dry_run:
+            self.db.insert_game(self.game.__dict__)
+
         self.random_seed = random_seed
         self.set_random_seed(self.random_seed)
         self.llms_temperature = llms_temperature
         self.history_window_size = history_window_size
-        self.judge_llm = self.get_or_load_llm(judge_llm_model_name)
+        self.judge_llm = self.get_or_load_llm(judge_llm_model_name, gpu_index=judge_llm_gpu)
 
     def set_random_seed(self, random_seed: int) -> None:
         random.seed(random_seed)
+        torch.random.manual_seed(random_seed)
 
-    def get_or_load_llm(self, model_name: str) -> LLM:
+    def get_or_load_llm(self, model_name: str, gpu_index: int) -> LLM:
         if model_name not in self.llms:
-            self.logger.info(f"Loading LLM: {model_name} on device: {self.device}")
-            self.llms[model_name] = LLM(device=self.device, model_name=model_name, temp=self.llms_temperature)
+            this_llm_device = self.get_device(gpu_index=gpu_index)
+            self.logger.info(f"Loading LLM: {model_name} on device: {this_llm_device}")
+            self.llms[model_name] = LLM(
+                device=this_llm_device,
+                model_name=model_name,
+                temp=self.llms_temperature,
+                verbose=self.dry_run,
+            )
         return self.llms[model_name]
 
-    def create_player(self, name: str, model_name: Optional[str] = None) -> None:
-        llm = self.get_or_load_llm(model_name)
+    def create_player(self, name: str, game_id: int, model_name: str, gpu_index: int) -> None:
+        llm = self.get_or_load_llm(model_name, gpu_index=gpu_index)
         last_player_id = self.db.get_last_player_id()
         player_id = last_player_id + 1
         self.logger.info(f"Creating player: {player_id} - {name} with LLM: {llm.model_name}")
-        player = Player(player_id, name, llm)
+        player = Player(player_id, name, game_id, llm)
         self.players.append(player)
-        self.db.insert_player(player.__dict__)
+        if not self.dry_run:
+            self.db.insert_player(player.__dict__)
 
     def load_word_data(self, file_path: str, filter_known_words: str) -> None:
         self.logger.info(f"Loading word data from: {file_path}")
@@ -327,7 +339,7 @@ class GameManager:
             # Skip players who defined the word correctly
             if round.player_definitions[player.player_id]["judge_decision"]:
                 self.logger.info(
-                    f"Skipping player {player.player_id} - {player.name} from voting as they defined the word correctly"
+                    f"Skipping player with database ID {player.player_id} - {player.name} from voting as they defined the word correctly"
                 )
                 continue
             vote_definition_messages = [{"role": "system", "content": game_rules_prompt}]
@@ -387,22 +399,40 @@ class GameManager:
         for player_id, score in scores.items():
             player = self.get_player_by_id(player_id)
             player.update_score(score)
-            self.db.update_player(player_id, {"score": player.score})
+            if not self.dry_run:
+                self.db.update_player(player_id, {"score": player.score})
 
-        # Store round data in the database
-        self.db.insert_round(round.__dict__)
+        if not self.dry_run:
+            # Store round data in the database
+            self.db.insert_round(round.__dict__)
 
     def get_player_by_id(self, player_id: int) -> Player:
-        for player in self.players:
-            if player.player_id == player_id:
-                return player
-        raise ValueError(f"Player with ID {player_id} not found")
+        try:
+            for player in self.players:
+                if player.player_id == player_id:
+                    return player
+            raise ValueError(f"Player with ID {player_id} not found")
+        except ValueError as e:
+            self.logger.critical(e)
+            exit()
 
-    def get_device(self) -> torch.device:
-        if not torch.backends.mps.is_available():
-            if torch.cuda.is_available():
-                return torch.device("cuda")
+    def get_device(self, gpu_index: int) -> torch.device:
+        try:
+            if not torch.backends.mps.is_available():
+                if torch.cuda.is_available():
+                    # Check if that GPU index is valid
+                    if gpu_index >= torch.cuda.device_count():
+                        raise ValueError(
+                            f"GPU index {gpu_index} is not valid. There are only {torch.cuda.device_count()} GPUs available"
+                        )
+                    # Check if that GPU index is free
+                    if torch.cuda.memory_allocated(torch.device(f"cuda:{gpu_index}")) > 0:
+                        raise ValueError(f"GPU index {gpu_index} is not free")
+                    return torch.device(f"cuda:{gpu_index}")
+                else:
+                    return torch.device("cpu")
             else:
-                return torch.device("cpu")
-        else:
-            return torch.device("mps")
+                return torch.device("mps")
+        except ValueError as e:
+            self.logger.critical(e)
+            exit()

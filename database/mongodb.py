@@ -1,6 +1,7 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from utils.logger import setup_logger
+from datetime import datetime
 
 
 class MongoDB:
@@ -15,6 +16,10 @@ class MongoDB:
         player_data_for_db = player_data.copy()
         player_data_for_db.pop("logger", None)
         player_data_for_db.pop("llm", None)
+
+        # Add the current timestamp to the player_data
+        player_data_for_db["created_at"] = datetime.now()
+        player_data_for_db["updated_at"] = datetime.now()
         self.db["players"].insert_one(player_data_for_db)
 
     def get_last_player_id(self) -> int:
@@ -24,6 +29,8 @@ class MongoDB:
         return 0
 
     def update_player(self, player_id: int, update_data: dict) -> None:
+        # Add the current timestamp to the update_data
+        update_data["updated_at"] = datetime.now()
         self.db["players"].update_one({"player_id": player_id}, {"$set": update_data})
 
     def get_last_game_id(self) -> int:
@@ -36,6 +43,9 @@ class MongoDB:
         # Check if the game_data has "logger" key, drop it
         game_data_for_db = game_data.copy()
         game_data_for_db.pop("logger", None)
+        # Add the current timestamp to the game_data
+        game_data_for_db["created_at"] = datetime.now()
+        game_data_for_db["updated_at"] = datetime.now()
         self.db["games"].insert_one(game_data_for_db)
 
     def get_player_rounds(self, player_id: int, window_size: int) -> list:
@@ -62,6 +72,10 @@ class MongoDB:
         round_data_for_db["player_definitions"] = player_definitions
         round_data_for_db["votes"] = votes
         round_data_for_db["scores"] = scores
+
+        # Add the current timestamp to the round_data
+        round_data_for_db["created_at"] = datetime.now()
+        round_data_for_db["updated_at"] = datetime.now()
         self.db["rounds"].insert_one(round_data_for_db)
 
     def send_ping(self) -> None:
@@ -70,5 +84,5 @@ class MongoDB:
             self.client.admin.command("ping")
             self.logger.info("Pinged your deployment. You successfully connected to MongoDB!")
         except Exception as e:
-            self.logger.error(f"Error connecting to MongoDB: {e}")
+            self.logger.critical(f"Error connecting to MongoDB: {e}")
             raise e
