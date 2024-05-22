@@ -6,8 +6,10 @@ import os
 
 
 class LLM:
-    def __init__(self, device: torch.device, temp: float, model_name: str, max_tokens: int = 512):
-        self.logger = setup_logger("llm", "logs/llm.log")
+    def __init__(
+        self, device: torch.device, temp: float, model_name: str, max_tokens: int = 512, verbose: bool = False
+    ):
+        self.logger = setup_logger("llm", "logs/llm.log", verbose=verbose)
         self.model_name = model_name
         self.device = device
         self.temp = temp
@@ -19,6 +21,35 @@ class LLM:
             self.model, self.tokenizer = load(model_name)
         else:
             if self.model_name == "meta-llama/Meta-Llama-3-8B-Instruct":
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
+                """
+                Based on the information at https://huggingface.co/docs/transformers/main/en/model_doc/llama3
+                The Llama3 models were trained using bfloat16, but the original inference uses float16.
+                The original model uses pad_id = -1 which means that there is no padding token.
+                We can’t have the same logic, make sure to add a padding token using tokenizer.add_special_tokens({"pad_token":"<pad>"}) and resize the token embedding accordingly.
+                You should also set the model.config.pad_token_id.
+                """
+                if self.tokenizer.pad_token is None:
+                    self.tokenizer.add_special_tokens({"pad_token": "<pad>"})
+                    self.tokenizer.pad_token_id = self.tokenizer.convert_tokens_to_ids("<pad>")
+
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name, token=os.getenv("HF_TOKEN"), torch_dtype=torch.float16
+                ).to(self.device)
+                self.model.resize_token_embeddings(len(self.tokenizer))
+                self.model.config.pad_token_id = self.tokenizer.pad_token_id
+
+                self.pipe = pipeline(
+                    task="text-generation",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    device=self.device,
+                    max_new_tokens=self.max_tokens,
+                    temperature=self.temp,
+                    do_sample=True,
+                    return_full_text=False,
+                )
+            elif self.model_name == "google/gemma-1.1-7b-it":
                 self.pipe = pipeline(
                     "text-generation",
                     model=self.model_name,
@@ -27,6 +58,7 @@ class LLM:
                     temperature=self.temp,
                     max_new_tokens=self.max_tokens,
                     do_sample=True,
+                    # return_full_text=False,
                 )
             elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.2":
                 self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
@@ -43,6 +75,40 @@ class LLM:
                     pad_token_id=self.tokenizer.eos_token_id,
                     do_sample=True,
                 )
+            elif self.model_name == "microsoft/Phi-3-small-8k-instruct":
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    model_name, trust_remote_code=True, token=os.getenv("HF_TOKEN")
+                )
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    trust_remote_code=True,
+                    token=os.getenv("HF_TOKEN"),
+                    torch_dtype="auto",
+                ).to(self.device)
+                self.pipe = pipeline(
+                    task="text-generation",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    device=self.device,
+                    max_new_tokens=self.max_tokens,
+                    temperature=self.temp,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    return_full_text=False,
+                )
+
+    def check_input_with_context_length(self, messages: List[dict]) -> None:
+        """
+        Check if the input prompt is within the context length of the model. For now, we are assuming that the context
+        length is 8192 tokens. If the prompt is greater than 8192 tokens, raise an error.
+        """
+        input_prompt = self.pipe.tokenizer.apply_chat_template(
+            messages, add_generation_prompt=True, return_tensors="pt"
+        )
+        if len(input_prompt[0]) > 8192:
+            raise ValueError(
+                f"Error: Input {messages[0]['content'][:100]} is greater than 8192 tokens\n{messages}"
+            )
 
     def generate_answer(self, messages: List[dict]) -> str:
         if self.device.type == "mps":
@@ -58,36 +124,79 @@ class LLM:
                 temp=self.temp,
             )
         else:
-            if self.model_name == "meta-llama/Meta-Llama-3-8B-Instruct":
-                prompt = self.pipe.tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=True
-                )
-                self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
-                terminators = [
-                    self.pipe.tokenizer.eos_token_id,
-                    self.pipe.tokenizer.convert_tokens_to_ids("<|eot_id|>"),
-                ]
-                outputs = self.pipe(
-                    prompt,
-                    do_sample=True,
-                    eos_token_id=terminators,
-                    temperature=self.temp,
-                )
-                return outputs[0]["generated_text"][len(prompt) :]
-            elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.2":
-                prompt = self.tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=True
-                )
-                self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
-                outputs = self.pipe(
-                    prompt,
-                    do_sample=True,
-                    pad_token_id=self.pipe.tokenizer.eos_token_id,
-                    max_new_tokens=self.max_tokens,
-                    temperature=self.temp,
-                )
-                return outputs[0]["generated_text"][len(outputs) :]
-                # output = self.pipe(messages)[0]["generated_text"][-1]["content"].strip()
+            try:
+                if self.model_name == "meta-llama/Meta-Llama-3-8B-Instruct":
+                    prompt = self.pipe.tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=True
+                    )
+                    self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
+                    self.check_input_with_context_length(messages)
+                    terminators = [
+                        self.pipe.tokenizer.eos_token_id,
+                        self.pipe.tokenizer.convert_tokens_to_ids("<|eot_id|>"),
+                    ]
+                    outputs = self.pipe(
+                        prompt,
+                        do_sample=True,
+                        eos_token_id=terminators,
+                        temperature=self.temp,
+                    )
+                    return outputs[0]["generated_text"]
+                elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.2":
+                    prompt = self.tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=True
+                    )
+                    self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
+                    self.check_input_with_context_length(messages)
+                    outputs = self.pipe(
+                        prompt,
+                        do_sample=True,
+                        pad_token_id=self.pipe.tokenizer.eos_token_id,
+                        max_new_tokens=self.max_tokens,
+                        temperature=self.temp,
+                    )
+                    return outputs[0]["generated_text"][len(outputs) :]
+                    # output = self.pipe(messages)[0]["generated_text"][-1]["content"].strip()
+                elif self.model_name == "google/gemma-1.1-7b-it":
+                    # This model does not support "system" messages.
+                    # Get the content of the "system" message and put it at the beginning of the "user" message
+                    # First, assert that messages has only two elements, one has role "system" and the other has role "user"
+                    assert len(messages) == 2
+                    assert messages[0]["role"] == "system"
+                    assert messages[1]["role"] == "user"
+                    # Get the content of the "user" message
+                    user_message = messages[1]["content"]
+                    # Get the content of the "system" message
+                    system_message = messages[0]["content"]
+                    messages = [{"role": "user", "content": "\n".join([system_message, user_message])}]
+                    prompt = self.pipe.tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=True
+                    )
+                    self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
+                    self.check_input_with_context_length(messages)
+                    outputs = self.pipe(
+                        prompt,
+                        do_sample=True,
+                        temperature=self.temp,
+                    )
+                    return outputs[0]["generated_text"][len(prompt) :]
+                elif self.model_name == "microsoft/Phi-3-small-8k-instruct":
+                    prompt = self.tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=True
+                    )
+                    self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
+                    self.check_input_with_context_length(messages)
+                    outputs = self.pipe(
+                        prompt,
+                        do_sample=True,
+                        pad_token_id=self.pipe.tokenizer.eos_token_id,
+                        max_new_tokens=self.max_tokens,
+                        temperature=self.temp,
+                    )
+                    return outputs[0]["generated_text"]
+            except ValueError as e:
+                self.logger.critical(e)
+                exit()
 
     def generate_definition(self, word: str, messages: List[dict]) -> str:
         self.logger.info(f"Generating definition for word: {word} using model: {self.model_name}")
@@ -108,10 +217,9 @@ class LLM:
             elif any(char.isdigit() for char in model_output):
                 return int("".join(filter(str.isdigit, model_output)))
             else:
-                # raise ValueError
-                raise ValueError()
-        except ValueError:
-            self.logger.error(f"Error: {model_output} does not start with a number")
+                raise ValueError(f"Error: {model_output} does not start with a number")
+        except ValueError as e:
+            self.logger.critical(e)
             exit()
 
     def judge_decision(self, word: str, messages: List[dict]) -> bool:
