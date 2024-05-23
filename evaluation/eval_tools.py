@@ -100,51 +100,27 @@ class evaluation_tools:
         
         return game_data
     
-    def get_word_experiment_data(self, start_game_id: int, end_game_id: int, word_filter: list[tuple[str, str]]):
+    def get_experiment_data(self, start_game_id: int, end_game_id: int):
         """
         Get the data of a word category experiment
         :param start_game_id: The id of the first game
-        :param end_game_id: The id of the last game
-        :param word_filter: The data filter used in the experiment
         :return: A dictionary containing the data of all games in the experiment
         """
         experiment_data = {}
-        for filter in word_filter:
-            experiment_data[filter] = {}
         for i in range(start_game_id, end_game_id+1):
             game = self.db["games"].find_one({'game_id':i})
-            for filter in word_filter:
-                if game['filter_words'] == filter[1] and game['words_file'] == filter[0]:
-                    game_data = self.get_game_data(i)
-                    if game_data != None:
-                        experiment_data[filter][i] = game_data
-                    else:
-                        print("Game", i, "data is missing")
+            game_data = self.get_game_data(i)
+            if game_data != None:
+                experiment_data.setdefault((game['words_file'], 
+                                            game['filter_words'],
+                                            game['receiving_vote_points'], 
+                                            game['correct_vote_points'],
+                                            game['correct_definition_points']), {})[i] = game_data
+            else:
+                print("Game", i, "data is missing")
         
         return experiment_data
     
-    def get_rule_experiment_data(self, start_game_id: int, end_game_id: int, true_def_points: list[int]):
-        """
-        Get the data of a rule set experiment
-        :param start_game_id: The id of the first game
-        :param end_game_id: The id of the last game
-        :param true_def_points: award received for generating true definition in the experiment
-        :return: A dictionary containing the data of all games in the experiment
-        """
-        experiment_data = {}
-        for points in true_def_points:
-            experiment_data[points] = {}
-        for i in range(start_game_id, end_game_id+1):
-            game = self.db["games"].find_one({'game_id':i})
-            for points in true_def_points:
-                if game['correct_definition_points'] == points:
-                    game_data = self.get_game_data(i)
-                    if game_data != None:
-                        experiment_data[points][i] = game_data
-                    else:
-                        print("Game", i, "data is missing")
-        
-        return experiment_data
     
     def experiment_game_average(self, experiment_data: dict):
         """
@@ -222,7 +198,7 @@ class evaluation_tools:
         """
         round_average = self.experiment_round_average(experiment_data)
         llm_players = list(list(experiment_data.values())[0]['llm_knows_ratio'][0].keys())
-        fig, axs = plt.subplots(len(llm_players), 1, figsize=(7, len(llm_players) * 5))
+        _, axs = plt.subplots(len(llm_players), 1, figsize=(7, len(llm_players) * 5))
         for i, llm in enumerate(llm_players):
             avg_true_def_smooth = np.convolve(round_average['true_def_ratio']['mean'][llm], np.ones(window_size), 'valid') / window_size
             avg_llm_knows_smooth = np.convolve(round_average['llm_knows_ratio']['mean'][llm], np.ones(window_size), 'valid') / window_size
@@ -231,7 +207,7 @@ class evaluation_tools:
             n = len(round_average['true_def_ratio']['mean'][llm])
             # set xlabal as round number and y label as ratio
 
-            ax = axs[i]
+            ax = axs[i] if len(llm_players) > 1 else axs
             ax.plot(avg_true_def_smooth, label='True Definition Ratio')
             ax.fill_between(range(n+1-window_size), avg_true_def_smooth-std_true_def_smooth, 
                             avg_true_def_smooth+std_true_def_smooth, alpha=0.2)
