@@ -329,7 +329,7 @@ def is_api_model(model_name: str) -> bool:
     return False
 
 
-def num_tokens_from_messages(self, messages: List[dict], model_name: str) -> int:
+def num_tokens_from_messages(messages: List[dict], model_name: str) -> int:
     """Return the number of tokens used by a list of messages."""
     try:
         encoding = tiktoken.encoding_for_model(model_name)

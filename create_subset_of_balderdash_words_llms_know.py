@@ -8,6 +8,7 @@ from utils.logger import setup_logger
 from tqdm import tqdm
 from dotenv import load_dotenv
 from openai import OpenAI
+from typing import Optional
 
 load_dotenv()
 
@@ -28,7 +29,7 @@ def get_device(llm_model_name: str, judge_llm_model_name: str) -> torch.device:
         return torch.device("mps")
 
 
-def get_or_load_llm(model_name: str, device: torch.device, random_seed: int) -> LLM:
+def get_or_load_llm(model_name: str, device: torch.device, random_seed: Optional[int] = None) -> LLM:
     if model_name not in llms:
         llms[model_name] = LLM(device=device, model_name=model_name, temp=0.9, random_seed=random_seed)
     return llms[model_name]

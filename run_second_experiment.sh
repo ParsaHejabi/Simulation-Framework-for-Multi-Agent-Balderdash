@@ -5,6 +5,7 @@ source venv/bin/activate
 dry_run=false
 
 # player_llm_models can be a string with multiple models separated by whitestpace
+# supported models up to now are: "meta-llama/Meta-Llama-3-8B-Instruct", "microsoft/Phi-3-small-8k-instruct", "google/gemma-1.1-7b-it", "mistralai/Mistral-7B-Instruct-v0.3", "gpt-3.5-turbo-0125"
 player_llm_models="meta-llama/Meta-Llama-3-8B-Instruct microsoft/Phi-3-small-8k-instruct google/gemma-1.1-7b-it"
 num_players=3
 judge_llm_model="meta-llama/Meta-Llama-3-8B-Instruct"
