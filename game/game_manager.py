@@ -218,19 +218,30 @@ class GameManager:
                 )
                 + 1
             )
-            history.append(
-                {
-                    "round_id": round_id,
-                    "word": word,
-                    "definition": definition,
-                    "generated_definition": generated_definition,
-                    "wrote_true_definition": wrote_true_definition,
-                    "guessed_correct_definiton": guessed_correct_definiton,
-                    "deception_ratio": deception_ratio,
-                    "round_winners_strategies": round_winners_strategies,
-                    "rank_among_players": rank_among_players,
-                }
-            )
+            if history_type == "full":
+                history.append(
+                    {
+                        "round_id": round_id,
+                        "word": word,
+                        "definition": definition,
+                        "generated_definition": generated_definition,
+                        "wrote_true_definition": wrote_true_definition,
+                        "guessed_correct_definiton": guessed_correct_definiton,
+                        "deception_ratio": deception_ratio,
+                        "round_winners_strategies": round_winners_strategies,
+                        "rank_among_players": rank_among_players,
+                    }
+                )
+            elif history_type == "mini":
+                history.append(
+                    {
+                        "round_id": round_id,
+                        "rank_among_players": rank_among_players,
+                        "score": self.get_player_by_id(player_id).score,
+                        "word": word,
+                        "generated_definition": generated_definition,
+                    }
+                )
 
         df = pd.DataFrame(history)
         return df.to_csv(index=False)
