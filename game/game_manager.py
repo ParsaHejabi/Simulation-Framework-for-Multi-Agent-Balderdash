@@ -6,9 +6,9 @@ import random
 from utils.logger import setup_logger
 import pandas as pd
 from ast import literal_eval
-from typing import Optional, List, Tuple
+from typing import List, Tuple
 import torch
-from utils.llm import LLM
+from utils.llm import LLM, is_api_model
 import pandas as pd
 
 
@@ -71,13 +71,14 @@ class GameManager:
 
     def get_or_load_llm(self, model_name: str, gpu_index: int) -> LLM:
         if model_name not in self.llms:
-            this_llm_device = self.get_device(gpu_index=gpu_index)
+            this_llm_device = self.get_device(model_name=model_name, gpu_index=gpu_index)
             self.logger.info(f"Loading LLM: {model_name} on device: {this_llm_device}")
             self.llms[model_name] = LLM(
                 device=this_llm_device,
                 model_name=model_name,
                 temp=self.llms_temperature,
                 verbose=self.dry_run,
+                random_seed=self.random_seed,
             )
         return self.llms[model_name]
 
@@ -416,8 +417,11 @@ class GameManager:
             self.logger.critical(e)
             exit()
 
-    def get_device(self, gpu_index: int) -> torch.device:
+    def get_device(self, model_name: str, gpu_index: int) -> torch.device:
         try:
+            if gpu_index < 0 or is_api_model(model_name):
+                return torch.device("cpu")
+
             if not torch.backends.mps.is_available():
                 if torch.cuda.is_available():
                     # Check if that GPU index is valid

@@ -1,19 +1,29 @@
 from utils.logger import setup_logger
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
-from typing import List
+from typing import List, Optional
 import os
+from openai import OpenAI
+import tiktoken
 
 
 class LLM:
     def __init__(
-        self, device: torch.device, temp: float, model_name: str, max_tokens: int = 512, verbose: bool = False
+        self,
+        device: torch.device,
+        temp: float,
+        model_name: str,
+        max_tokens: int = 512,
+        verbose: bool = False,
+        random_seed: Optional[int] = None,
     ):
         self.logger = setup_logger("llm", "logs/llm.log", verbose=verbose)
         self.model_name = model_name
         self.device = device
         self.temp = temp
         self.max_tokens = max_tokens
+        self.random_seed = random_seed
+        self.is_api_model = is_api_model(model_name)
 
         if self.device.type == "mps":
             from mlx_lm import load
@@ -96,6 +106,28 @@ class LLM:
                     pad_token_id=self.tokenizer.eos_token_id,
                     return_full_text=False,
                 )
+            elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.3":
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
+                self.pipe = pipeline(
+                    task="text-generation",
+                    model=self.model_name,
+                    tokenizer=self.tokenizer,
+                    device=self.device,
+                    temperature=self.temp,
+                    max_new_tokens=self.max_tokens,
+                    do_sample=True,
+                    return_full_text=False,
+                    token=os.getenv("HF_TOKEN"),
+                    pad_token_id=self.tokenizer.eos_token_id,
+                )
+            elif self.is_api_model:
+                if self.model_name.startswith("gpt-"):
+                    self.client = OpenAI(
+                        api_key=os.getenv("OPENAI_API_KEY"),
+                        project=os.getenv("OPENAI_PROJECT_ID"),
+                    )
+            else:
+                raise ValueError(f"Error: Model {self.model_name} not supported")
 
     def check_input_with_context_length(self, messages: List[dict]) -> None:
         """
@@ -194,6 +226,56 @@ class LLM:
                         temperature=self.temp,
                     )
                     return outputs[0]["generated_text"]
+                elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.3":
+                    # This model does not support "system" messages and only has "user" and "assistant" roles.
+                    # Get the content of the "system" message and put it at the beginning of the "user" message
+                    # First, assert that messages has only two elements, one has role "system" and the other has role "user".
+                    assert len(messages) == 2
+                    assert messages[0]["role"] == "system"
+                    assert messages[1]["role"] == "user"
+                    # Get the content of the "user" message.
+                    user_message = messages[1]["content"]
+                    # Get the content of the "system" message.
+                    system_message = messages[0]["content"]
+                    messages = [{"role": "user", "content": "\n".join([system_message, user_message])}]
+                    prompt = self.pipe.tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=True
+                    )
+                    self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
+                    self.check_input_with_context_length(messages)
+                    outputs = self.pipe(
+                        prompt,
+                        do_sample=True,
+                        temperature=self.temp,
+                        max_new_tokens=self.max_tokens,
+                    )
+                    return outputs[0]["generated_text"]
+                elif self.is_api_model:
+                    if self.model_name.startswith("gpt-"):
+                        self.logger.info(
+                            f"Counting tokens for messages: {num_tokens_from_messages(messages, self.model_name)}"
+                        )
+                        self.logger.info(f"Calling OpenAI chat/completion with messages: {messages}")
+                        completion = self.client.chat.completions.create(
+                            model=self.model_name,
+                            messages=messages,
+                            max_tokens=self.max_tokens,
+                            seed=self.random_seed,
+                        )
+                        if completion.choices[0].finish_reason == "length":
+                            raise ValueError(
+                                f"Error: OpenAI model {self.model_name} output for messages: {completion.choices[0].message.content} has reached max tokens {self.max_tokens}"
+                            )
+                        elif completion.choices[0].finish_reason == "null":
+                            raise ValueError(
+                                f"Error: OpenAI model {self.model_name} output for messages: API response still in progress or incomplete"
+                            )
+                        elif completion.choices[0].finish_reason == "stop":
+                            return completion.choices[0].message.content
+
+                else:
+                    raise ValueError(f"Error: Model {self.model_name} not supported")
+
             except ValueError as e:
                 self.logger.critical(e)
                 exit()
@@ -235,3 +317,56 @@ class LLM:
         model_output = self.generate_answer(messages)
         self.logger.info(f"Model output for knowing one of the definitions: {model_output}")
         return model_output.strip().lower()[0:4] == "true"
+
+
+def is_api_model(model_name: str) -> bool:
+    if model_name in ["gpt-3.5-turbo", "gpt-3.5-turbo-0125", "gpt-4-turbo", "gpt-4o"] or model_name in [
+        "gemini-pro",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro-latest",
+    ]:
+        return True
+    return False
+
+
+def num_tokens_from_messages(self, messages: List[dict], model_name: str) -> int:
+    """Return the number of tokens used by a list of messages."""
+    try:
+        encoding = tiktoken.encoding_for_model(model_name)
+    except KeyError:
+        print("Warning: model not found. Using cl100k_base encoding.")
+        encoding = tiktoken.get_encoding("cl100k_base")
+    if model_name in {
+        "gpt-3.5-turbo-0613",
+        "gpt-3.5-turbo-16k-0613",
+        "gpt-4-0314",
+        "gpt-4-32k-0314",
+        "gpt-4-0613",
+        "gpt-4-32k-0613",
+    }:
+        tokens_per_message = 3
+        tokens_per_name = 1
+    elif model_name == "gpt-3.5-turbo-0301":
+        tokens_per_message = 4  # every message follows <|start|>{role/name}\n{content}<|end|>\n
+        tokens_per_name = -1  # if there's a name, the role is omitted
+    elif "gpt-3.5-turbo" in model_name:
+        print(
+            "Warning: gpt-3.5-turbo may update over time. Returning num tokens assuming gpt-3.5-turbo-0613."
+        )
+        return num_tokens_from_messages(messages, model_name="gpt-3.5-turbo-0613")
+    elif "gpt-4" in model_name:
+        print("Warning: gpt-4 may update over time. Returning num tokens assuming gpt-4-0613.")
+        return num_tokens_from_messages(messages, model_name="gpt-4-0613")
+    else:
+        raise NotImplementedError(
+            f"""num_tokens_from_messages() is not implemented for model {model_name}. See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens."""
+        )
+    num_tokens = 0
+    for message in messages:
+        num_tokens += tokens_per_message
+        for key, value in message.items():
+            num_tokens += len(encoding.encode(value))
+            if key == "name":
+                num_tokens += tokens_per_name
+    num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
+    return num_tokens
