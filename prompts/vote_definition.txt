@@ -1,4 +1,4 @@
-Please act as a competitive player in the Balderdash game and choose the reference dictionary definition index. You will be given the word for this round, your given definition, and the other definitions excluding the definitions that were semantically equal to the reference dictionary definition, including the reference dictionary definition in random order. You should consider the game's scoring rules and the history of your performance in previous rounds. Begin by elaborating on this information and choose the reference dictionary definition which will maximize your points. Avoid explaining your strategy. Choose your vote among the allowed choice(s) and only write your vote. Your definition for "{word}" was "{definition}". All definitions, including the reference dictionary definition are given to you in the format:
+Please act as a competitive player in the Balderdash game and choose the reference dictionary definition index. You will be given the word for this round, your given definition, and the other definitions, excluding the definitions that were semantically equal to the reference dictionary definition, including the reference dictionary definition in random order. You should consider the game's scoring rules and the history of your performance in previous rounds. Begin by elaborating on this information and choose the reference dictionary definition, which will maximize your points. Avoid explaining your strategy. Choose your vote among the allowed choice(s) and only write your vote. Your definition for "{word}" was "{definition}". All definitions, including the reference dictionary definition, are given to you in the format:
 1. definition_1
 2. definition_2
 3. definition_3
@@ -8,4 +8,4 @@ Definitions:
 ```
 As a Balderdash player, your task is to choose the reference dictionary definition index {all_indexes_excluding_player} and write it without any explanation.
 Your allowed choice(s): {all_indexes_excluding_player}
-Use at most one character which is a single digit.
+Use at most one character, which is a single digit.
