@@ -96,6 +96,22 @@ class LLM:
                     pad_token_id=self.tokenizer.eos_token_id,
                     return_full_text=False,
                 )
+            elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.3":
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
+                self.pipe = pipeline(
+                    task="text-generation",
+                    model=self.model_name,
+                    tokenizer=self.tokenizer,
+                    device=self.device,
+                    temperature=self.temp,
+                    max_new_tokens=self.max_tokens,
+                    do_sample=True,
+                    return_full_text=False,
+                    token=os.getenv("HF_TOKEN"),
+                    pad_token_id=self.tokenizer.eos_token_id,
+                )
+            else:
+                raise ValueError(f"Error: Model {self.model_name} not supported")
 
     def check_input_with_context_length(self, messages: List[dict]) -> None:
         """
@@ -194,6 +210,33 @@ class LLM:
                         temperature=self.temp,
                     )
                     return outputs[0]["generated_text"]
+                elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.3":
+                    # This model does not support "system" messages and only has "user" and "assistant" roles.
+                    # Get the content of the "system" message and put it at the beginning of the "user" message
+                    # First, assert that messages has only two elements, one has role "system" and the other has role "user".
+                    assert len(messages) == 2
+                    assert messages[0]["role"] == "system"
+                    assert messages[1]["role"] == "user"
+                    # Get the content of the "user" message.
+                    user_message = messages[1]["content"]
+                    # Get the content of the "system" message.
+                    system_message = messages[0]["content"]
+                    messages = [{"role": "user", "content": "\n".join([system_message, user_message])}]
+                    prompt = self.pipe.tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=True
+                    )
+                    self.logger.info(f"Message: {messages} changed to prompt: {prompt}")
+                    self.check_input_with_context_length(messages)
+                    outputs = self.pipe(
+                        prompt,
+                        do_sample=True,
+                        temperature=self.temp,
+                        max_new_tokens=self.max_tokens,
+                    )
+                    return outputs[0]["generated_text"]
+                else:
+                    raise ValueError(f"Error: Model {self.model_name} not supported")
+
             except ValueError as e:
                 self.logger.critical(e)
                 exit()

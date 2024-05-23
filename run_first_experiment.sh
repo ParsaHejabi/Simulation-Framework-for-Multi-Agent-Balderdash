@@ -5,8 +5,8 @@ source venv/bin/activate
 dry_run=false
 
 # player_llm_models can be a string with multiple models separated by whitestpace
-# player_llm_models="meta-llama/Meta-Llama-3-8B-Instruct microsoft/Phi-3-small-8k-instruct google/gemma-1.1-7b-it"
-player_llm_models="meta-llama/Meta-Llama-3-8B-Instruct microsoft/Phi-3-small-8k-instruct google/gemma-1.1-7b-it"
+# supported models up to now are: "meta-llama/Meta-Llama-3-8B-Instruct", "microsoft/Phi-3-small-8k-instruct", "google/gemma-1.1-7b-it", "mistralai/Mistral-7B-Instruct-v0.3"
+player_llm_models="meta-llama/Meta-Llama-3-8B-Instruct microsoft/Phi-3-small-8k-instruct mistralai/Mistral-7B-Instruct-v0.3"
 num_players=3
 judge_llm_model="meta-llama/Meta-Llama-3-8B-Instruct"
 # the first gpu is for the judge, and the rest are for the players
@@ -131,3 +131,5 @@ done
 
 # Wait for any remaining background jobs to complete
 wait
+
+# TODO: call the evaluation script here with the game_id ranges related to this experiment
