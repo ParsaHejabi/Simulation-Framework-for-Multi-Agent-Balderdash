@@ -55,7 +55,7 @@ class GameManager:
         self.user_generate_definition_prompt_file = user_generate_definition_prompt_file
         self.vote_definition_prompt_file = vote_definition_prompt_file
         self.game = Game(
-            self.db.get_last_game_id() + 1,
+            game_id=self.db.get_last_game_id() + 1,
             game_description=game_description,
             number_of_rounds=num_rounds,
             judge_llm_model_name=judge_llm_model_name,
@@ -67,6 +67,13 @@ class GameManager:
             llms_temperature=llms_temperature,
             words_file=words_file,
             filter_words=filter_words,
+            history_type=history_type,
+            game_rules_prompt_file=game_rules_prompt_file,
+            system_judge_prompt_file=system_judge_prompt_file,
+            user_judge_prompt_file=user_judge_prompt_file,
+            history_prompt_file=history_prompt_file,
+            user_generate_definition_prompt_file=user_generate_definition_prompt_file,
+            vote_definition_prompt_file=vote_definition_prompt_file,
         )
         # If it is not a dry run, save the game to the database
         if not self.dry_run:
