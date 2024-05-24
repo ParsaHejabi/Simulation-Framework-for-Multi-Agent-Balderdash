@@ -6,6 +6,6 @@ Definitions:
 ```
 {definitions}
 ```
-As a Balderdash player, your task is to choose the reference dictionary definition index {all_indexes_excluding_player} and write it without any explanation.
+As a Balderdash player, your task is to choose the reference dictionary definition index {all_indexes_excluding_player_descriptive} and write it without any explanation.
 Your allowed choice(s): {all_indexes_excluding_player}
 Use at most one character, which is a single digit.

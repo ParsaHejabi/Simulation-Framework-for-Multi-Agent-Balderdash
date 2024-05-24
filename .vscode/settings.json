@@ -9,4 +9,7 @@
     "[plaintext]": {
         "editor.wordWrap": "on"
     },
+    "[shellscript]": {
+        "editor.formatOnSave": true
+    }
 }

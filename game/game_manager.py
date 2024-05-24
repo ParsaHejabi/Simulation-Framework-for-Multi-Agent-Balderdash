@@ -19,6 +19,7 @@ class GameManager:
         game_description: str,
         random_seed: int,
         llms_temperature: float,
+        history_type: str,
         history_window_size: int,
         receiving_vote_points: int,
         correct_vote_points: int,
@@ -28,6 +29,12 @@ class GameManager:
         judge_llm_gpu: int,
         words_file: str,
         filter_words: str,
+        game_rules_prompt_file: str,
+        system_judge_prompt_file: str,
+        user_judge_prompt_file: str,
+        history_prompt_file: str,
+        user_generate_definition_prompt_file: str,
+        vote_definition_prompt_file: str,
         dry_run: bool = False,
     ) -> None:
         self.dry_run = dry_run
@@ -41,6 +48,12 @@ class GameManager:
         self.correct_vote_points = correct_vote_points
         self.correct_definition_points = correct_definition_points
         self.filter_words = filter_words
+        self.game_rules_prompt_file = game_rules_prompt_file
+        self.system_judge_prompt_file = system_judge_prompt_file
+        self.user_judge_prompt_file = user_judge_prompt_file
+        self.history_prompt_file = history_prompt_file
+        self.user_generate_definition_prompt_file = user_generate_definition_prompt_file
+        self.vote_definition_prompt_file = vote_definition_prompt_file
         self.game = Game(
             self.db.get_last_game_id() + 1,
             game_description=game_description,
@@ -62,6 +75,7 @@ class GameManager:
         self.random_seed = random_seed
         self.set_random_seed(self.random_seed)
         self.llms_temperature = llms_temperature
+        self.history_type = history_type
         self.history_window_size = history_window_size
         self.judge_llm = self.get_or_load_llm(judge_llm_model_name, gpu_index=judge_llm_gpu)
 
@@ -218,7 +232,7 @@ class GameManager:
                 )
                 + 1
             )
-            if history_type == "full":
+            if self.history_type == "full":
                 history.append(
                     {
                         "round_id": round_id,
@@ -232,7 +246,7 @@ class GameManager:
                         "rank_among_players": rank_among_players,
                     }
                 )
-            elif history_type == "mini":
+            elif self.history_type == "mini":
                 history.append(
                     {
                         "round_id": round_id,
@@ -271,7 +285,7 @@ class GameManager:
         # Create a new round
         round = self.create_round(game_id, round_id, word, correct_definition, pos)
 
-        with open("prompts/game_rules.txt", "r") as game_rules_prompt_template_file:
+        with open(self.game_rules_prompt_file, "r") as game_rules_prompt_template_file:
             game_rules_prompt_template = game_rules_prompt_template_file.read()
             game_rules_prompt = game_rules_prompt_template.format(
                 receiving_vote_points=self.receiving_vote_points,
@@ -279,36 +293,44 @@ class GameManager:
                 correct_definition_points=self.correct_definition_points,
             )
 
-        with open("prompts/system_judge.txt", "r") as system_judge_prompt_template_file:
+        with open(self.system_judge_prompt_file, "r") as system_judge_prompt_template_file:
             system_judge_prompt_template = system_judge_prompt_template_file.read()
 
         # Generate definitions from players
         for player in self.players:
             generate_definition_messages = [{"role": "system", "content": game_rules_prompt}]
-            with open("prompts/history.txt", "r") as history_prompt_template_file:
-                history_prompt_template = history_prompt_template_file.read()
-                history_csv = self.get_player_history_csv(
-                    player_id=player.player_id,
-                    window_size=self.history_window_size,
-                )
-                history_prompt = history_prompt_template.format(history_csv=history_csv)
+            if self.history_type == "full" or self.history_type == "mini":
+                with open(self.history_prompt_file, "r") as history_prompt_template_file:
+                    history_prompt_template = history_prompt_template_file.read()
+                    history_csv = self.get_player_history_csv(
+                        player_id=player.player_id,
+                        window_size=self.history_window_size,
+                    )
+                    history_prompt = history_prompt_template.format(history_csv=history_csv)
+
             with open(
-                "prompts/user_generate_definition.txt", "r"
+                self.user_generate_definition_prompt_file, "r"
             ) as user_generate_definition_prompt_template_file:
                 user_generate_definition_prompt_template = (
                     user_generate_definition_prompt_template_file.read()
                 )
                 user_generate_definition_prompt = user_generate_definition_prompt_template.format(word=word)
-            generate_definition_messages.append(
-                {"role": "user", "content": "\n".join([history_prompt, user_generate_definition_prompt])}
-            )
+
+            if self.history_type == "full" or self.history_type == "mini":
+                generate_definition_messages.append(
+                    {"role": "user", "content": "\n".join([history_prompt, user_generate_definition_prompt])}
+                )
+            else:
+                generate_definition_messages.append(
+                    {"role": "user", "content": user_generate_definition_prompt}
+                )
             definition = player.generate_definition(word, generate_definition_messages)
             self.logger.info(
                 f"Player {player.player_id} - {player.name} defined the word {word} as: {definition}"
             )
 
             judge_decision_messages = [{"role": "system", "content": system_judge_prompt_template}]
-            with open("prompts/user_judge.txt", "r") as user_judge_prompt_template_file:
+            with open(self.user_judge_prompt_file, "r") as user_judge_prompt_template_file:
                 user_judge_prompt_template = user_judge_prompt_template_file.read()
                 user_judge_prompt = user_judge_prompt_template.format(
                     word=word, correct_definition=correct_definition, definition=definition
@@ -355,12 +377,13 @@ class GameManager:
                 )
                 continue
             vote_definition_messages = [{"role": "system", "content": game_rules_prompt}]
-            with open("prompts/history.txt", "r") as history_prompt_template_file:
-                history_prompt_template = history_prompt_template_file.read()
-                history_csv = self.get_player_history_csv(
-                    player_id=player.player_id, window_size=self.history_window_size
-                )
-                history_prompt = history_prompt_template.format(history_csv=history_csv)
+            if self.history_type == "full" or self.history_type == "mini":
+                with open(self.history_prompt_file, "r") as history_prompt_template_file:
+                    history_prompt_template = history_prompt_template_file.read()
+                    history_csv = self.get_player_history_csv(
+                        player_id=player.player_id, window_size=self.history_window_size
+                    )
+                    history_prompt = history_prompt_template.format(history_csv=history_csv)
 
             # get the index of this player's definition in the round.definitions_permutation list
             player_index_in_the_permuted_list = round.definitions_permutation.index(player.player_id)
@@ -373,26 +396,33 @@ class GameManager:
             ]
 
             if len(all_indexes_excluding_player) == 1:
-                all_indexes_excluding_player_text = f"which is {all_indexes_excluding_player[0]}"
+                all_indexes_excluding_player_descriptive = (
+                    f"which is {', '.join(all_indexes_excluding_player)}"
+                )
             else:
-                all_indexes_excluding_player_text = f"among {', '.join(all_indexes_excluding_player)}"
+                all_indexes_excluding_player_descriptive = f"among {', '.join(all_indexes_excluding_player)}"
 
             # find this player's definition in the eligible_voting_players_definitions list and remove it from the list
             definitions_passed_for_voting = eligible_voting_players_definitions.copy()
             # pop the player's definition from definitions_passed_for_voting.
             # The player's definition is the one that starts with player_index_in_the_permuted_list + 1
             definitions_passed_for_voting.pop(player_index_in_the_permuted_list)
-            with open("prompts/vote_definition.txt", "r") as vote_definition_prompt_template_file:
+            with open(self.vote_definition_prompt_file, "r") as vote_definition_prompt_template_file:
                 vote_definition_prompt_template = vote_definition_prompt_template_file.read()
                 vote_definition_prompt = vote_definition_prompt_template.format(
                     word=word,
                     definition=round.player_definitions[player.player_id]["definition"],
                     definitions="\n".join(definitions_passed_for_voting),
-                    all_indexes_excluding_player=all_indexes_excluding_player_text,
+                    all_indexes_excluding_player_descriptive=all_indexes_excluding_player_descriptive,
+                    all_indexes_excluding_player={", ".join(all_indexes_excluding_player)},
                 )
-            vote_definition_messages.append(
-                {"role": "user", "content": "\n".join([history_prompt, vote_definition_prompt])}
-            )
+
+            if self.history_type == "full" or self.history_type == "mini":
+                vote_definition_messages.append(
+                    {"role": "user", "content": "\n".join([history_prompt, vote_definition_prompt])}
+                )
+            else:
+                vote_definition_messages.append({"role": "user", "content": vote_definition_prompt})
             target_permuted_player_id = player.vote_definition(
                 vote_definition_messages,
             )
