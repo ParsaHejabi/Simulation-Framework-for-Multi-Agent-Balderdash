@@ -186,16 +186,16 @@ class GameManager:
                 str(round["player_definitions"][str(player_id)]["judge_decision"]).lower() == "true"
             )
             if is_true_definition:
-                outcome = f"This definition was semantically equal to the true dictionary definition"
+                outcome = f"This definition was semantically equal to the true dictionary definition."
             else:
                 number_of_received_votes = len(
                     [k for k, v in round["votes"].items() if v == player_id and k != player_id]
                 )
                 has_chosen_true_definition = round["votes"][str(player_id)] == -1
                 if has_chosen_true_definition:
-                    outcome = f"This definition was chosen by {number_of_received_votes} players excluding the player himself and the player also chose the true dictionary definition"
+                    outcome = f"This definition was chosen by {number_of_received_votes} players excluding the player himself and the player also chose the true dictionary definition."
                 else:
-                    outcome = f"This definition was chosen by {number_of_received_votes} players excluding the player himself"
+                    outcome = f"This definition was chosen by {number_of_received_votes} players excluding the player himself."
 
             round_winners_strategies.append((player_definition, outcome))
 
@@ -220,22 +220,15 @@ class GameManager:
                 )
                 deception_ratio = number_of_received_votes / len(round["votes"])
             round_winners_strategies = self.get_round_winners_strategies(round)
-            # rank_among_players is an integer indicating your rank among all players up to that round. It can be calculated using self.players list and each player.score attribute.
-            # If players have the same score, they should have the same rank.
-            rank_among_players = (
-                len(
-                    [
-                        player
-                        for player in self.players
-                        if player.score > self.get_player_by_id(player_id).score
-                    ]
-                )
-                + 1
-            )
+            player = self.get_player_by_id(player_id)
+            rank_among_players_in_round = player.rank_history[round_id]
+            score_in_round = player.score_history[round_id]
             if self.history_type == "full":
                 history.append(
                     {
                         "round_id": round_id,
+                        "rank_among_players": rank_among_players_in_round,
+                        "score": score_in_round,
                         "word": word,
                         "definition": definition,
                         "generated_definition": generated_definition,
@@ -243,15 +236,14 @@ class GameManager:
                         "guessed_correct_definiton": guessed_correct_definiton,
                         "deception_ratio": deception_ratio,
                         "round_winners_strategies": round_winners_strategies,
-                        "rank_among_players": rank_among_players,
                     }
                 )
             elif self.history_type == "mini":
                 history.append(
                     {
                         "round_id": round_id,
-                        "rank_among_players": rank_among_players,
-                        "score": self.get_player_by_id(player_id).score,
+                        "rank_among_players": rank_among_players_in_round,
+                        "score": score_in_round,
                         "word": word,
                         "generated_definition": generated_definition,
                     }
@@ -437,16 +429,52 @@ class GameManager:
             correct_vote_points=self.correct_vote_points,
             correct_definition_points=self.correct_definition_points,
         )
+        rankings = self.calculate_player_rankings(scores)
         self.logger.info(f"Round scores: {scores}")
         for player_id, score in scores.items():
             player = self.get_player_by_id(player_id)
-            player.update_score(score)
+            player.update_score_and_rank(round_id, score, rankings[player_id])
             if not self.dry_run:
-                self.db.update_player(player_id, {"score": player.score})
+                self.db.update_player(
+                    player_id,
+                    {
+                        "score": player.score,
+                        "score_history": player.score_history,
+                        "rank_history": player.rank_history,
+                    },
+                )
 
         if not self.dry_run:
             # Store round data in the database
             self.db.insert_round(round.__dict__)
+
+    def calculate_player_rankings(self, current_round_scores: dict) -> dict:
+        """
+        This function should calculate the player rankings based on the scores.
+        If players have the same score, they should have the same rank.
+        """
+        self.logger.info("Calculating player rankings")
+        scores = {player.player_id: player.score for player in self.players}
+        try:
+            assert scores.keys() == current_round_scores.keys()
+        except AssertionError:
+            self.logger.critical(
+                "Player scores and current round scores do not match. This should not happen."
+            )
+        for player_id, score in current_round_scores.items():
+            scores[player_id] += score
+        sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        rankings = {}
+        current_rank = 1
+        current_score = sorted_scores[0][1]
+        for index, (player_id, score) in enumerate(sorted_scores):
+            if score < current_score:
+                current_rank = index + 1
+                current_score = score
+            rankings[player_id] = current_rank
+        self.logger.info(f"Calculated rankings: {rankings}")
+        self.rankings = rankings
+        return rankings
 
     def get_player_by_id(self, player_id: int) -> Player:
         try:
@@ -465,14 +493,14 @@ class GameManager:
 
             if not torch.backends.mps.is_available():
                 if torch.cuda.is_available():
-                    # Check if that GPU index is valid
-                    if gpu_index >= torch.cuda.device_count():
-                        raise ValueError(
-                            f"GPU index {gpu_index} is not valid. There are only {torch.cuda.device_count()} GPUs available"
-                        )
-                    # Check if that GPU index is free
-                    if torch.cuda.memory_allocated(torch.device(f"cuda:{gpu_index}")) > 0:
-                        raise ValueError(f"GPU index {gpu_index} is not free")
+                    # # Check if that GPU index is valid
+                    # if gpu_index >= torch.cuda.device_count():
+                    #     raise ValueError(
+                    #         f"GPU index {gpu_index} is not valid. There are only {torch.cuda.device_count()} GPUs available"
+                    #     )
+                    # # Check if that GPU index is free
+                    # if torch.cuda.memory_allocated(torch.device(f"cuda:{gpu_index}")) > 0:
+                    #     raise ValueError(f"GPU index {gpu_index} is not free")
                     return torch.device(f"cuda:{gpu_index}")
                 else:
                     return torch.device("cpu")

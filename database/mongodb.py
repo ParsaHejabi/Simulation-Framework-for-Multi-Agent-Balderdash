@@ -17,6 +17,11 @@ class MongoDB:
         player_data_for_db.pop("logger", None)
         player_data_for_db.pop("llm", None)
 
+        score_history = {str(k): v for k, v in player_data_for_db["score_history"].items()}
+        rank_history = {str(k): v for k, v in player_data_for_db["rank_history"].items()}
+        player_data_for_db["score_history"] = score_history
+        player_data_for_db["rank_history"] = rank_history
+
         # Add the current timestamp to the player_data
         player_data_for_db["created_at"] = datetime.now()
         player_data_for_db["updated_at"] = datetime.now()
@@ -29,6 +34,10 @@ class MongoDB:
         return 0
 
     def update_player(self, player_id: int, update_data: dict) -> None:
+        # For each key in the update_data, if the value is a dict, make sure to string all the keys for that value
+        for key, value in update_data.items():
+            if isinstance(value, dict):
+                update_data[key] = {str(k): v for k, v in value.items()}
         # Add the current timestamp to the update_data
         update_data["updated_at"] = datetime.now()
         self.db["players"].update_one({"player_id": player_id}, {"$set": update_data})

@@ -41,8 +41,8 @@ if __name__ == "__main__":
         os.path.basename(__file__).replace(".py", ""),
         os.path.join("logs", f"{os.path.basename(__file__).replace('.py', '.log')}"),
     )
-    llm_model_name = "gpt-3.5-turbo-0125"
-    judge_llm_model_name = "gpt-3.5-turbo-0125"
+    llm_model_name = "microsoft/Phi-3-small-8k-instruct"
+    judge_llm_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
     random_seed = None
     device = get_device(llm_model_name, judge_llm_model_name)
     logger.info(f"Device: {device}")

@@ -44,7 +44,7 @@ class LLM:
                     self.tokenizer.pad_token_id = self.tokenizer.convert_tokens_to_ids("<pad>")
 
                 self.model = AutoModelForCausalLM.from_pretrained(
-                    model_name, token=os.getenv("HF_TOKEN"), torch_dtype=torch.float16
+                    model_name, token=os.getenv("HF_TOKEN"), torch_dtype=torch.bfloat16
                 ).to(self.device)
                 self.model.resize_token_embeddings(len(self.tokenizer))
                 self.model.config.pad_token_id = self.tokenizer.pad_token_id
@@ -58,12 +58,13 @@ class LLM:
                     temperature=self.temp,
                     do_sample=True,
                     return_full_text=False,
+                    token=os.getenv("HF_TOKEN"),
                 )
             elif self.model_name == "google/gemma-1.1-7b-it":
                 self.pipe = pipeline(
                     "text-generation",
                     model=self.model_name,
-                    # model_kwargs={"torch_dtype": torch.bfloat16},
+                    model_kwargs={"torch_dtype": torch.bfloat16},
                     device=self.device,
                     temperature=self.temp,
                     max_new_tokens=self.max_tokens,
@@ -93,7 +94,7 @@ class LLM:
                     model_name,
                     trust_remote_code=True,
                     token=os.getenv("HF_TOKEN"),
-                    torch_dtype="auto",
+                    torch_dtype=torch.bfloat16,
                 ).to(self.device)
                 self.pipe = pipeline(
                     task="text-generation",
@@ -105,6 +106,7 @@ class LLM:
                     do_sample=True,
                     pad_token_id=self.tokenizer.eos_token_id,
                     return_full_text=False,
+                    token=os.getenv("HF_TOKEN"),
                 )
             elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.3":
                 self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
@@ -112,6 +114,7 @@ class LLM:
                     task="text-generation",
                     model=self.model_name,
                     tokenizer=self.tokenizer,
+                    model_kwargs={"torch_dtype": torch.bfloat16},
                     device=self.device,
                     temperature=self.temp,
                     max_new_tokens=self.max_tokens,
@@ -210,6 +213,7 @@ class LLM:
                         prompt,
                         do_sample=True,
                         temperature=self.temp,
+                        max_new_tokens=self.max_tokens,
                     )
                     return outputs[0]["generated_text"][len(prompt) :]
                 elif self.model_name == "microsoft/Phi-3-small-8k-instruct":

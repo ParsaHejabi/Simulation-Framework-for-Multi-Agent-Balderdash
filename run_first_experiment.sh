@@ -6,11 +6,11 @@ dry_run=false
 
 # player_llm_models can be a string with multiple models separated by whitestpace
 # supported models up to now are: "meta-llama/Meta-Llama-3-8B-Instruct", "microsoft/Phi-3-small-8k-instruct", "google/gemma-1.1-7b-it", "mistralai/Mistral-7B-Instruct-v0.3", "gpt-3.5-turbo-0125"
-player_llm_models="meta-llama/Meta-Llama-3-8B-Instruct"
-num_players=3
+player_llm_models="meta-llama/Meta-Llama-3-8B-Instruct meta-llama/Meta-Llama-3-8B-Instruct google/gemma-1.1-7b-it google/gemma-1.1-7b-it"
+num_players=4
 judge_llm_model="meta-llama/Meta-Llama-3-8B-Instruct"
 # the first gpu is for the judge, and the rest are for the players
-llm_gpu_mapping=(0 0 0 0)
+llm_gpu_mapping=(0 0 0 2 2)
 # first make a unique set of indexes from llm_gpu_mapping array
 llm_gpu_mapping_set=($(echo "${llm_gpu_mapping[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
 # join the elements of llm_gpu_mapping_set array with comma and store it in gpu_indexes
@@ -25,10 +25,10 @@ llm_gpu_mapping=$(
 )
 # history type can be "full", "mini", or "none"
 history_type="full"
-history_window_size=0
+history_window_size=20
 receiving_vote_points=1
 correct_vote_points=2
-correct_definition_points=100
+correct_definition_points=3
 llms_temperature=0.9
 
 # words_file can be "basic_english_words.csv", or "meta-llama_Meta-Llama-3-8B-Instruct_balderdash_words1.csv",  "gpt-3.5-turbo-0125_balderdash_words1.csv"
@@ -102,9 +102,9 @@ if [ $dry_run = true ]; then
     wait
 else
     num_rounds=20
-    random_seeds=(5)
+    random_seeds=(5 10 15 20 25)
     # filter words can be "all" or "known"
-    filter_words="known"
+    filter_words="all"
     # Format the game_description string using the variables
     game_description="Convergence experiment with default scoring rules (${receiving_vote_points}, ${correct_vote_points}, ${correct_definition_points}) and ${#random_seeds[@]} different seeds, no communication, no seed stories."
 fi
@@ -180,3 +180,4 @@ done
 wait
 
 # TODO: call the evaluation script here with the game_id ranges related to this experiment
+# TODO: Email notification when the experiment is done

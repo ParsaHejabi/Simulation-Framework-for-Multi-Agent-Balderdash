@@ -12,11 +12,17 @@ class Player:
         self.game_id = game_id
         self.name = name
         self.score = 0
+        self.score_history = {}
+        self.rank_history = {}
         self.llm = llm
 
-    def update_score(self, points: int) -> None:
-        self.logger.info(f"Player {self.player_id} - {self.name} scored: {points} points")
+    def update_score_and_rank(self, round_id: int, points: int, rank: int) -> None:
+        self.logger.info(
+            f"Player {self.player_id} - {self.name} scored: {points} points in round: {round_id}"
+        )
         self.score += points
+        self.score_history[round_id] = self.score
+        self.rank_history[round_id] = rank
 
     def generate_definition(self, word: str, messages: List[dict]) -> str:
         self.logger.info(f"Generating definition for word: {word} for player: {self.player_id} - {self.name}")
