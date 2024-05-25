@@ -2,11 +2,11 @@
 
 source venv/bin/activate
 
-dry_run=true
+dry_run=false
 
 # player_llm_models can be a string with multiple models separated by whitestpace
 # supported models up to now are: "meta-llama/Meta-Llama-3-8B-Instruct", "microsoft/Phi-3-small-8k-instruct", "google/gemma-1.1-7b-it", "mistralai/Mistral-7B-Instruct-v0.3", "gpt-3.5-turbo-0125"
-player_llm_models_list="meta-llama/Meta-Llama-3-8B-Instruct microsoft/Phi-3-small-8k-instruct google/gemma-1.1-7b-it mistralai/Mistral-7B-Instruct-v0.3"
+player_llm_models_list="meta-llama/Meta-Llama-3-8B-Instruct microsoft/Phi-3-small-8k-instruct google/gemma-1.1-7b-it mistralai/Mistral-7B-Instruct-v0.3 gpt-3.5-turbo-0125"
 history_types_list="full mini"
 # for each player_llm_models in player_llm_models_list
 for player_llm_models in $player_llm_models_list; do
@@ -15,14 +15,9 @@ for player_llm_models in $player_llm_models_list; do
         num_players=3
         judge_llm_model="meta-llama/Meta-Llama-3-8B-Instruct"
         # the first gpu is for the judge, and the rest are for the players
-        llm_gpu_mapping=(0 0 0 0)
-        # first make a unique set of indexes from llm_gpu_mapping array
-        llm_gpu_mapping_set=($(echo "${llm_gpu_mapping[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
-        # join the elements of llm_gpu_mapping_set array with comma and store it in gpu_indexes
-        gpu_indexes=$(
-            IFS=,
-            echo "${llm_gpu_mapping_set[*]}"
-        )
+        llm_gpu_mapping=(7 7 7 7)
+        # gpu_indexes in this device are from 0 to 7
+        gpu_indexes="0,1,2,3,4,5,6,7"
         # join the elements of llm_gpu_mapping array with whitespace and store it in llm_gpu_mapping
         llm_gpu_mapping=$(
             IFS=' '
