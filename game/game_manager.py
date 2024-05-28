@@ -169,7 +169,9 @@ class GameManager:
     def create_round(
         self, game_id: int, round_id: int, word: str, correct_definition: str, pos: str
     ) -> Round:
-        self.logger.info(f"Creating round: {round_id}/10 in game: {game_id} with word: {word}")
+        self.logger.info(
+            f"Creating round: {round_id}/{self.game.number_of_rounds} in game: {game_id} with word: {word}"
+        )
         return Round(
             game_id=game_id,
             round_id=round_id,
@@ -428,7 +430,13 @@ class GameManager:
             self.logger.info(
                 f"Player {player.player_id} - {player.name} voted for definition: {target_permuted_player_id}"
             )
-            round.add_vote(player.player_id, target_permuted_player_id)
+            try:
+                round.add_vote(player.player_id, target_permuted_player_id)
+            except IndexError:
+                self.logger.critical(
+                    f"Player {player.player_id} - {player.name} voted for an invalid definition: {target_permuted_player_id}"
+                )
+                exit()
 
         # Calculate scores
         scores = round.calculate_scores(

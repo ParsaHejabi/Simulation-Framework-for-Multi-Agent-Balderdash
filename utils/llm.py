@@ -5,6 +5,7 @@ from typing import List, Optional
 import os
 from openai import OpenAI
 import tiktoken
+import re
 
 
 class LLM:
@@ -296,14 +297,17 @@ class LLM:
         model_output = self.generate_answer(messages)
         self.logger.info(f"Model output for voting a definition: {model_output}")
         try:
-            # if output starts with a number, convert to int and return
-            if model_output[0].isdigit():
-                return int(model_output[0])
-            # if output has a single digit in it, find it using regex and return it
-            elif any(char.isdigit() for char in model_output):
-                return int("".join(filter(str.isdigit, model_output)))
+            model_output = model_output.strip()
+            # If output has a number at the start, try converting it to int and return it. The number could be a single digit or a number with multiple digits.
+            if model_output.split()[0].isdigit():
+                return int(model_output.split()[0])
             else:
-                raise ValueError(f"Error: {model_output} does not start with a number")
+                # Search for the first occurrence of one or more digits as a whole word
+                match = re.search(r"\b\d+\b", model_output)
+                if match:
+                    return int(match.group())
+                else:
+                    raise ValueError(f"Error: Could not find a number in the model output: {model_output}")
         except ValueError as e:
             self.logger.critical(e)
             exit()

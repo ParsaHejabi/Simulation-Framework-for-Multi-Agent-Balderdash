@@ -4,56 +4,47 @@ source venv/bin/activate
 
 dry_run=false
 
-words_files_list="meta-llama_Meta-Llama-3-8B-Instruct_balderdash_words1.csv basic_english_words.csv"
-history_types_list="full mini none"
+# player_llm_models can be a string with multiple models separated by whitestpace
+# supported models up to now are: "meta-llama/Meta-Llama-3-8B-Instruct", "microsoft/Phi-3-small-8k-instruct", "google/gemma-1.1-7b-it", "mistralai/Mistral-7B-Instruct-v0.3", "gpt-3.5-turbo-0125"
+player_llm_models_list="meta-llama/Meta-Llama-3-8B-Instruct microsoft/Phi-3-small-8k-instruct google/gemma-1.1-7b-it mistralai/Mistral-7B-Instruct-v0.3 gpt-3.5-turbo-0125"
+# correct_definition_points should be two numbers 0 and 50
+correct_definition_points_list="0 50"
 
 current_run=0
 
-# for each words_file in words_files_list
-for words_file in $words_files_list; do
-    # for each history_type in history_types_list
-    for history_type in $history_types_list; do
-        # player_llm_models can be a string with multiple models separated by whitespace
-        # supported models up to now are: "meta-llama/Meta-Llama-3-8B-Instruct", "microsoft/Phi-3-small-8k-instruct", "google/gemma-1.1-7b-it", "mistralai/Mistral-7B-Instruct-v0.3", "gpt-3.5-turbo-0125"
-        player_llm_models="meta-llama/Meta-Llama-3-8B-Instruct microsoft/Phi-3-small-8k-instruct google/gemma-1.1-7b-it mistralai/Mistral-7B-Instruct-v0.3"
-        num_players=4
+# for each player_llm_models in player_llm_models_list
+for player_llm_models in $player_llm_models_list; do
+    # for each correct_definition_points in correct_definition_points_list
+    for correct_definition_points in $correct_definition_points_list; do
+        num_players=1
         judge_llm_model="meta-llama/Meta-Llama-3-8B-Instruct"
         # the first gpu is for the judge, and the rest are for the players
-        llm_gpu_mapping=(0 0 1 2 0)
-        # gpu_indexes in this device are from 0 to 2
+        llm_gpu_mapping=(0 1)
+        # gpu_indexes in this device are from 0 to 7
         gpu_indexes="0,1,2"
         # join the elements of llm_gpu_mapping array with whitespace and store it in llm_gpu_mapping
         llm_gpu_mapping=$(
             IFS=' '
             echo "${llm_gpu_mapping[*]}"
         )
-
         history_window_size=20
+        history_type="none"
+
         receiving_vote_points=1
         correct_vote_points=2
-        correct_definition_points=3
         llms_temperature=0.9
 
-        # filter words for this experiment is "all"
-        filter_words="all"
+        # words_file is $player_llm_models after replacing '/' with '_' and appending "_balderdash_words1.csv"
+        words_file=$(echo $player_llm_models | tr '/' '_')"_balderdash_words1.csv"
+        # filter words is "known" for this experiment
+        filter_words="known"
 
         system_judge_prompt_file="prompts/system_judge.txt"
         user_judge_prompt_file="prompts/user_judge.txt"
-
-        # if $history_type is "full" or "mini"
-        if [ $history_type = "full" ] || [ $history_type = "mini" ]; then
-            game_rules_prompt_file="prompts/game_rules.txt"
-            user_generate_definition_prompt_file="prompts/user_generate_definition.txt"
-            vote_definition_prompt_file="prompts/vote_definition.txt"
-
-            history_prompt_file="prompts/"$history_type"_history.txt"
-        else
-            game_rules_prompt_file="prompts/game_rules_no_history.txt"
-            user_generate_definition_prompt_file="prompts/user_generate_definition_no_history.txt"
-            vote_definition_prompt_file="prompts/vote_definition_no_history.txt"
-
-            history_prompt_file="none"
-        fi
+        game_rules_prompt_file="prompts/game_rules_no_history.txt"
+        user_generate_definition_prompt_file="prompts/user_generate_definition_no_history.txt"
+        vote_definition_prompt_file="prompts/vote_definition_no_history.txt"
+        history_prompt_file="none"
 
         # if dry_run is true, then num_rounds has to be 1, and random_seeds has to be of length 1
         if [ $dry_run = true ]; then
@@ -113,14 +104,14 @@ for words_file in $words_files_list; do
             num_rounds=20
             random_seeds=(5 10 15 20 25)
             # Calculate total number of runs upfront
-            total_runs=$((${#random_seeds[@]} * ${#words_files_list[@]} * ${#history_types_list[@]}))
+            total_runs=$((${#random_seeds[@]} * (${#player_llm_models_list[@]} * ${#correct_definition_points_list[@]})))
             # Format the game_description string using the variables
-            game_description="Leaderboard experiment with words file ${words_file}, history type ${history_type}, default scoring rules (${receiving_vote_points}, ${correct_vote_points}, ${correct_definition_points}) and ${#random_seeds[@]} different seeds, no communication, no seed stories."
+            game_description="Effect of rules without history experiment for player_llm_models: ${player_llm_models}, with modified scoring rules (${receiving_vote_points}, ${correct_vote_points}, ${correct_definition_points}) and ${#random_seeds[@]} different seeds, no communication, no seed stories."
         fi
 
         for random_seed in "${random_seeds[@]}"; do
             current_run=$((current_run + 1))
-            echo "Running ${current_run}/${total_runs} with words file ${words_file}, history type ${history_type}, and random seed ${random_seed}"
+            echo "Running ${current_run}/${total_runs} with player LLM model ${player_llm_models}, correct_definition_points ${correct_definition_points}, and random seed ${random_seed}"
 
             # echo the full command to be run
             echo "CUDA_VISIBLE_DEVICES=${gpu_indexes} python3 main.py \
@@ -176,7 +167,5 @@ for words_file in $words_files_list; do
     done
 done
 
-# Wait for any remaining background jobs to complete
+# Wait for all background jobs to complete
 wait
-
-# TODO: call the evaluation script here with the game_id ranges related to this experiment

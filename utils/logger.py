@@ -9,7 +9,7 @@ def setup_logger(name: str, log_file: str, level=logging.INFO, verbose: bool = F
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
 
     # File handler
-    file_handler = logging.FileHandler(log_file)
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setFormatter(formatter)
 
     logger = logging.getLogger(name)
