@@ -16,6 +16,13 @@ class Game:
         llms_temperature: float,
         words_file: str,
         filter_words: str,
+        history_type: str,
+        game_rules_prompt_file: str,
+        system_judge_prompt_file: str,
+        user_judge_prompt_file: str,
+        history_prompt_file: str,
+        user_generate_definition_prompt_file: str,
+        vote_definition_prompt_file: str,
     ) -> None:
         self.logger = setup_logger(f"game_{game_id}", f"logs/game_{game_id}.log")
         self.logger.info(
@@ -33,3 +40,10 @@ class Game:
         self.llms_temperature = llms_temperature
         self.words_file = words_file
         self.filter_words = filter_words
+        self.history_type = history_type
+        self.game_rules_prompt_file = game_rules_prompt_file
+        self.system_judge_prompt_file = system_judge_prompt_file
+        self.user_judge_prompt_file = user_judge_prompt_file
+        self.history_prompt_file = history_prompt_file
+        self.user_generate_definition_prompt_file = user_generate_definition_prompt_file
+        self.vote_definition_prompt_file = vote_definition_prompt_file

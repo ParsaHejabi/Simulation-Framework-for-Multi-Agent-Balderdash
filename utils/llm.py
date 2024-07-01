@@ -5,6 +5,7 @@ from typing import List, Optional
 import os
 from openai import OpenAI
 import tiktoken
+import re
 
 
 class LLM:
@@ -44,7 +45,7 @@ class LLM:
                     self.tokenizer.pad_token_id = self.tokenizer.convert_tokens_to_ids("<pad>")
 
                 self.model = AutoModelForCausalLM.from_pretrained(
-                    model_name, token=os.getenv("HF_TOKEN"), torch_dtype=torch.float16
+                    model_name, token=os.getenv("HF_TOKEN"), torch_dtype=torch.bfloat16
                 ).to(self.device)
                 self.model.resize_token_embeddings(len(self.tokenizer))
                 self.model.config.pad_token_id = self.tokenizer.pad_token_id
@@ -58,12 +59,13 @@ class LLM:
                     temperature=self.temp,
                     do_sample=True,
                     return_full_text=False,
+                    token=os.getenv("HF_TOKEN"),
                 )
             elif self.model_name == "google/gemma-1.1-7b-it":
                 self.pipe = pipeline(
                     "text-generation",
                     model=self.model_name,
-                    # model_kwargs={"torch_dtype": torch.bfloat16},
+                    model_kwargs={"torch_dtype": torch.bfloat16},
                     device=self.device,
                     temperature=self.temp,
                     max_new_tokens=self.max_tokens,
@@ -93,7 +95,7 @@ class LLM:
                     model_name,
                     trust_remote_code=True,
                     token=os.getenv("HF_TOKEN"),
-                    torch_dtype="auto",
+                    torch_dtype=torch.bfloat16,
                 ).to(self.device)
                 self.pipe = pipeline(
                     task="text-generation",
@@ -105,6 +107,7 @@ class LLM:
                     do_sample=True,
                     pad_token_id=self.tokenizer.eos_token_id,
                     return_full_text=False,
+                    token=os.getenv("HF_TOKEN"),
                 )
             elif self.model_name == "mistralai/Mistral-7B-Instruct-v0.3":
                 self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
@@ -112,6 +115,7 @@ class LLM:
                     task="text-generation",
                     model=self.model_name,
                     tokenizer=self.tokenizer,
+                    model_kwargs={"torch_dtype": torch.bfloat16},
                     device=self.device,
                     temperature=self.temp,
                     max_new_tokens=self.max_tokens,
@@ -210,6 +214,7 @@ class LLM:
                         prompt,
                         do_sample=True,
                         temperature=self.temp,
+                        max_new_tokens=self.max_tokens,
                     )
                     return outputs[0]["generated_text"][len(prompt) :]
                 elif self.model_name == "microsoft/Phi-3-small-8k-instruct":
@@ -292,14 +297,17 @@ class LLM:
         model_output = self.generate_answer(messages)
         self.logger.info(f"Model output for voting a definition: {model_output}")
         try:
-            # if output starts with a number, convert to int and return
-            if model_output[0].isdigit():
-                return int(model_output[0])
-            # if output has a single digit in it, find it using regex and return it
-            elif any(char.isdigit() for char in model_output):
-                return int("".join(filter(str.isdigit, model_output)))
+            model_output = model_output.strip()
+            # If output has a number at the start, try converting it to int and return it. The number could be a single digit or a number with multiple digits.
+            if model_output.split()[0].isdigit():
+                return int(model_output.split()[0])
             else:
-                raise ValueError(f"Error: {model_output} does not start with a number")
+                # Search for the first occurrence of one or more digits as a whole word
+                match = re.search(r"\b\d+\b", model_output)
+                if match:
+                    return int(match.group())
+                else:
+                    raise ValueError(f"Error: Could not find a number in the model output: {model_output}")
         except ValueError as e:
             self.logger.critical(e)
             exit()
@@ -329,7 +337,7 @@ def is_api_model(model_name: str) -> bool:
     return False
 
 
-def num_tokens_from_messages(self, messages: List[dict], model_name: str) -> int:
+def num_tokens_from_messages(messages: List[dict], model_name: str) -> int:
     """Return the number of tokens used by a list of messages."""
     try:
         encoding = tiktoken.encoding_for_model(model_name)

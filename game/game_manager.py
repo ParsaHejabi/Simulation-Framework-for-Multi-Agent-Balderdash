@@ -19,6 +19,7 @@ class GameManager:
         game_description: str,
         random_seed: int,
         llms_temperature: float,
+        history_type: str,
         history_window_size: int,
         receiving_vote_points: int,
         correct_vote_points: int,
@@ -28,6 +29,12 @@ class GameManager:
         judge_llm_gpu: int,
         words_file: str,
         filter_words: str,
+        game_rules_prompt_file: str,
+        system_judge_prompt_file: str,
+        user_judge_prompt_file: str,
+        history_prompt_file: str,
+        user_generate_definition_prompt_file: str,
+        vote_definition_prompt_file: str,
         dry_run: bool = False,
     ) -> None:
         self.dry_run = dry_run
@@ -41,8 +48,14 @@ class GameManager:
         self.correct_vote_points = correct_vote_points
         self.correct_definition_points = correct_definition_points
         self.filter_words = filter_words
+        self.game_rules_prompt_file = game_rules_prompt_file
+        self.system_judge_prompt_file = system_judge_prompt_file
+        self.user_judge_prompt_file = user_judge_prompt_file
+        self.history_prompt_file = history_prompt_file
+        self.user_generate_definition_prompt_file = user_generate_definition_prompt_file
+        self.vote_definition_prompt_file = vote_definition_prompt_file
         self.game = Game(
-            self.db.get_last_game_id() + 1,
+            game_id=self.db.get_last_game_id() + 1,
             game_description=game_description,
             number_of_rounds=num_rounds,
             judge_llm_model_name=judge_llm_model_name,
@@ -54,6 +67,13 @@ class GameManager:
             llms_temperature=llms_temperature,
             words_file=words_file,
             filter_words=filter_words,
+            history_type=history_type,
+            game_rules_prompt_file=game_rules_prompt_file,
+            system_judge_prompt_file=system_judge_prompt_file,
+            user_judge_prompt_file=user_judge_prompt_file,
+            history_prompt_file=history_prompt_file,
+            user_generate_definition_prompt_file=user_generate_definition_prompt_file,
+            vote_definition_prompt_file=vote_definition_prompt_file,
         )
         # If it is not a dry run, save the game to the database
         if not self.dry_run:
@@ -62,6 +82,7 @@ class GameManager:
         self.random_seed = random_seed
         self.set_random_seed(self.random_seed)
         self.llms_temperature = llms_temperature
+        self.history_type = history_type
         self.history_window_size = history_window_size
         self.judge_llm = self.get_or_load_llm(judge_llm_model_name, gpu_index=judge_llm_gpu)
 
@@ -148,7 +169,9 @@ class GameManager:
     def create_round(
         self, game_id: int, round_id: int, word: str, correct_definition: str, pos: str
     ) -> Round:
-        self.logger.info(f"Creating round: {round_id}/10 in game: {game_id} with word: {word}")
+        self.logger.info(
+            f"Creating round: {round_id}/{self.game.number_of_rounds} in game: {game_id} with word: {word}"
+        )
         return Round(
             game_id=game_id,
             round_id=round_id,
@@ -172,16 +195,16 @@ class GameManager:
                 str(round["player_definitions"][str(player_id)]["judge_decision"]).lower() == "true"
             )
             if is_true_definition:
-                outcome = f"This definition was semantically equal to the true dictionary definition"
+                outcome = f"This definition was semantically equal to the true dictionary definition."
             else:
                 number_of_received_votes = len(
                     [k for k, v in round["votes"].items() if v == player_id and k != player_id]
                 )
                 has_chosen_true_definition = round["votes"][str(player_id)] == -1
                 if has_chosen_true_definition:
-                    outcome = f"This definition was chosen by {number_of_received_votes} players excluding the player himself and the player also chose the true dictionary definition"
+                    outcome = f"This definition was chosen by {number_of_received_votes} players excluding the player himself and the player also chose the true dictionary definition."
                 else:
-                    outcome = f"This definition was chosen by {number_of_received_votes} players excluding the player himself"
+                    outcome = f"This definition was chosen by {number_of_received_votes} players excluding the player himself."
 
             round_winners_strategies.append((player_definition, outcome))
 
@@ -206,31 +229,34 @@ class GameManager:
                 )
                 deception_ratio = number_of_received_votes / len(round["votes"])
             round_winners_strategies = self.get_round_winners_strategies(round)
-            # rank_among_players is an integer indicating your rank among all players up to that round. It can be calculated using self.players list and each player.score attribute.
-            # If players have the same score, they should have the same rank.
-            rank_among_players = (
-                len(
-                    [
-                        player
-                        for player in self.players
-                        if player.score > self.get_player_by_id(player_id).score
-                    ]
+            player = self.get_player_by_id(player_id)
+            rank_among_players_in_round = player.rank_history[round_id]
+            score_in_round = player.score_history[round_id]
+            if self.history_type == "full":
+                history.append(
+                    {
+                        "round_id": round_id,
+                        "rank_among_players": rank_among_players_in_round,
+                        "score": score_in_round,
+                        "word": word,
+                        "definition": definition,
+                        "generated_definition": generated_definition,
+                        "wrote_true_definition": wrote_true_definition,
+                        "guessed_correct_definiton": guessed_correct_definiton,
+                        "deception_ratio": deception_ratio,
+                        "round_winners_strategies": round_winners_strategies,
+                    }
                 )
-                + 1
-            )
-            history.append(
-                {
-                    "round_id": round_id,
-                    "word": word,
-                    "definition": definition,
-                    "generated_definition": generated_definition,
-                    "wrote_true_definition": wrote_true_definition,
-                    "guessed_correct_definiton": guessed_correct_definiton,
-                    "deception_ratio": deception_ratio,
-                    "round_winners_strategies": round_winners_strategies,
-                    "rank_among_players": rank_among_players,
-                }
-            )
+            elif self.history_type == "mini":
+                history.append(
+                    {
+                        "round_id": round_id,
+                        "rank_among_players": rank_among_players_in_round,
+                        "score": score_in_round,
+                        "word": word,
+                        "generated_definition": generated_definition,
+                    }
+                )
 
         df = pd.DataFrame(history)
         return df.to_csv(index=False)
@@ -260,7 +286,7 @@ class GameManager:
         # Create a new round
         round = self.create_round(game_id, round_id, word, correct_definition, pos)
 
-        with open("prompts/game_rules.txt", "r") as game_rules_prompt_template_file:
+        with open(self.game_rules_prompt_file, "r") as game_rules_prompt_template_file:
             game_rules_prompt_template = game_rules_prompt_template_file.read()
             game_rules_prompt = game_rules_prompt_template.format(
                 receiving_vote_points=self.receiving_vote_points,
@@ -268,36 +294,44 @@ class GameManager:
                 correct_definition_points=self.correct_definition_points,
             )
 
-        with open("prompts/system_judge.txt", "r") as system_judge_prompt_template_file:
+        with open(self.system_judge_prompt_file, "r") as system_judge_prompt_template_file:
             system_judge_prompt_template = system_judge_prompt_template_file.read()
 
         # Generate definitions from players
         for player in self.players:
             generate_definition_messages = [{"role": "system", "content": game_rules_prompt}]
-            with open("prompts/history.txt", "r") as history_prompt_template_file:
-                history_prompt_template = history_prompt_template_file.read()
-                history_csv = self.get_player_history_csv(
-                    player_id=player.player_id,
-                    window_size=self.history_window_size,
-                )
-                history_prompt = history_prompt_template.format(history_csv=history_csv)
+            if self.history_type == "full" or self.history_type == "mini":
+                with open(self.history_prompt_file, "r") as history_prompt_template_file:
+                    history_prompt_template = history_prompt_template_file.read()
+                    history_csv = self.get_player_history_csv(
+                        player_id=player.player_id,
+                        window_size=self.history_window_size,
+                    )
+                    history_prompt = history_prompt_template.format(history_csv=history_csv)
+
             with open(
-                "prompts/user_generate_definition.txt", "r"
+                self.user_generate_definition_prompt_file, "r"
             ) as user_generate_definition_prompt_template_file:
                 user_generate_definition_prompt_template = (
                     user_generate_definition_prompt_template_file.read()
                 )
                 user_generate_definition_prompt = user_generate_definition_prompt_template.format(word=word)
-            generate_definition_messages.append(
-                {"role": "user", "content": "\n".join([history_prompt, user_generate_definition_prompt])}
-            )
+
+            if self.history_type == "full" or self.history_type == "mini":
+                generate_definition_messages.append(
+                    {"role": "user", "content": "\n".join([history_prompt, user_generate_definition_prompt])}
+                )
+            else:
+                generate_definition_messages.append(
+                    {"role": "user", "content": user_generate_definition_prompt}
+                )
             definition = player.generate_definition(word, generate_definition_messages)
             self.logger.info(
                 f"Player {player.player_id} - {player.name} defined the word {word} as: {definition}"
             )
 
             judge_decision_messages = [{"role": "system", "content": system_judge_prompt_template}]
-            with open("prompts/user_judge.txt", "r") as user_judge_prompt_template_file:
+            with open(self.user_judge_prompt_file, "r") as user_judge_prompt_template_file:
                 user_judge_prompt_template = user_judge_prompt_template_file.read()
                 user_judge_prompt = user_judge_prompt_template.format(
                     word=word, correct_definition=correct_definition, definition=definition
@@ -344,12 +378,13 @@ class GameManager:
                 )
                 continue
             vote_definition_messages = [{"role": "system", "content": game_rules_prompt}]
-            with open("prompts/history.txt", "r") as history_prompt_template_file:
-                history_prompt_template = history_prompt_template_file.read()
-                history_csv = self.get_player_history_csv(
-                    player_id=player.player_id, window_size=self.history_window_size
-                )
-                history_prompt = history_prompt_template.format(history_csv=history_csv)
+            if self.history_type == "full" or self.history_type == "mini":
+                with open(self.history_prompt_file, "r") as history_prompt_template_file:
+                    history_prompt_template = history_prompt_template_file.read()
+                    history_csv = self.get_player_history_csv(
+                        player_id=player.player_id, window_size=self.history_window_size
+                    )
+                    history_prompt = history_prompt_template.format(history_csv=history_csv)
 
             # get the index of this player's definition in the round.definitions_permutation list
             player_index_in_the_permuted_list = round.definitions_permutation.index(player.player_id)
@@ -362,33 +397,46 @@ class GameManager:
             ]
 
             if len(all_indexes_excluding_player) == 1:
-                all_indexes_excluding_player_text = f"which is {all_indexes_excluding_player[0]}"
+                all_indexes_excluding_player_descriptive = (
+                    f"which is {', '.join(all_indexes_excluding_player)}"
+                )
             else:
-                all_indexes_excluding_player_text = f"among {', '.join(all_indexes_excluding_player)}"
+                all_indexes_excluding_player_descriptive = f"among {', '.join(all_indexes_excluding_player)}"
 
             # find this player's definition in the eligible_voting_players_definitions list and remove it from the list
             definitions_passed_for_voting = eligible_voting_players_definitions.copy()
             # pop the player's definition from definitions_passed_for_voting.
             # The player's definition is the one that starts with player_index_in_the_permuted_list + 1
             definitions_passed_for_voting.pop(player_index_in_the_permuted_list)
-            with open("prompts/vote_definition.txt", "r") as vote_definition_prompt_template_file:
+            with open(self.vote_definition_prompt_file, "r") as vote_definition_prompt_template_file:
                 vote_definition_prompt_template = vote_definition_prompt_template_file.read()
                 vote_definition_prompt = vote_definition_prompt_template.format(
                     word=word,
                     definition=round.player_definitions[player.player_id]["definition"],
                     definitions="\n".join(definitions_passed_for_voting),
-                    all_indexes_excluding_player=all_indexes_excluding_player_text,
+                    all_indexes_excluding_player_descriptive=all_indexes_excluding_player_descriptive,
+                    all_indexes_excluding_player={", ".join(all_indexes_excluding_player)},
                 )
-            vote_definition_messages.append(
-                {"role": "user", "content": "\n".join([history_prompt, vote_definition_prompt])}
-            )
+
+            if self.history_type == "full" or self.history_type == "mini":
+                vote_definition_messages.append(
+                    {"role": "user", "content": "\n".join([history_prompt, vote_definition_prompt])}
+                )
+            else:
+                vote_definition_messages.append({"role": "user", "content": vote_definition_prompt})
             target_permuted_player_id = player.vote_definition(
                 vote_definition_messages,
             )
             self.logger.info(
                 f"Player {player.player_id} - {player.name} voted for definition: {target_permuted_player_id}"
             )
-            round.add_vote(player.player_id, target_permuted_player_id)
+            try:
+                round.add_vote(player.player_id, target_permuted_player_id)
+            except IndexError:
+                self.logger.critical(
+                    f"Player {player.player_id} - {player.name} voted for an invalid definition: {target_permuted_player_id}"
+                )
+                exit()
 
         # Calculate scores
         scores = round.calculate_scores(
@@ -396,16 +444,52 @@ class GameManager:
             correct_vote_points=self.correct_vote_points,
             correct_definition_points=self.correct_definition_points,
         )
+        rankings = self.calculate_player_rankings(scores)
         self.logger.info(f"Round scores: {scores}")
         for player_id, score in scores.items():
             player = self.get_player_by_id(player_id)
-            player.update_score(score)
+            player.update_score_and_rank(round_id, score, rankings[player_id])
             if not self.dry_run:
-                self.db.update_player(player_id, {"score": player.score})
+                self.db.update_player(
+                    player_id,
+                    {
+                        "score": player.score,
+                        "score_history": player.score_history,
+                        "rank_history": player.rank_history,
+                    },
+                )
 
         if not self.dry_run:
             # Store round data in the database
             self.db.insert_round(round.__dict__)
+
+    def calculate_player_rankings(self, current_round_scores: dict) -> dict:
+        """
+        This function should calculate the player rankings based on the scores.
+        If players have the same score, they should have the same rank.
+        """
+        self.logger.info("Calculating player rankings")
+        scores = {player.player_id: player.score for player in self.players}
+        try:
+            assert scores.keys() == current_round_scores.keys()
+        except AssertionError:
+            self.logger.critical(
+                "Player scores and current round scores do not match. This should not happen."
+            )
+        for player_id, score in current_round_scores.items():
+            scores[player_id] += score
+        sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        rankings = {}
+        current_rank = 1
+        current_score = sorted_scores[0][1]
+        for index, (player_id, score) in enumerate(sorted_scores):
+            if score < current_score:
+                current_rank = index + 1
+                current_score = score
+            rankings[player_id] = current_rank
+        self.logger.info(f"Calculated rankings: {rankings}")
+        self.rankings = rankings
+        return rankings
 
     def get_player_by_id(self, player_id: int) -> Player:
         try:
@@ -424,14 +508,14 @@ class GameManager:
 
             if not torch.backends.mps.is_available():
                 if torch.cuda.is_available():
-                    # Check if that GPU index is valid
-                    if gpu_index >= torch.cuda.device_count():
-                        raise ValueError(
-                            f"GPU index {gpu_index} is not valid. There are only {torch.cuda.device_count()} GPUs available"
-                        )
-                    # Check if that GPU index is free
-                    if torch.cuda.memory_allocated(torch.device(f"cuda:{gpu_index}")) > 0:
-                        raise ValueError(f"GPU index {gpu_index} is not free")
+                    # # Check if that GPU index is valid
+                    # if gpu_index >= torch.cuda.device_count():
+                    #     raise ValueError(
+                    #         f"GPU index {gpu_index} is not valid. There are only {torch.cuda.device_count()} GPUs available"
+                    #     )
+                    # # Check if that GPU index is free
+                    # if torch.cuda.memory_allocated(torch.device(f"cuda:{gpu_index}")) > 0:
+                    #     raise ValueError(f"GPU index {gpu_index} is not free")
                     return torch.device(f"cuda:{gpu_index}")
                 else:
                     return torch.device("cpu")

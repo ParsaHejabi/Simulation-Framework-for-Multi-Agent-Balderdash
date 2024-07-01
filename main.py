@@ -6,10 +6,19 @@ import argparse
 load_dotenv()
 
 
+def check_prompt_files_validity(prompt_files: list[str]) -> None:
+    for prompt_file in prompt_files:
+        if not os.path.isfile(prompt_file):
+            raise ValueError(f"Prompt file {prompt_file} does not exist")
+        if not prompt_file.endswith(".txt"):
+            raise ValueError(f"Prompt file {prompt_file} is not a text file")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--game_description", type=str, help="Game description")
     parser.add_argument("--random_seed", type=int, help="Random seed value")
+    parser.add_argument("--history_type", type=str, help="History type", choices=["full", "mini", "none"])
     parser.add_argument("--history_window_size", type=int, help="History window size")
     parser.add_argument("--player_llm_models", type=str, nargs="+", help="Player LLM model names")
     parser.add_argument("--num_players", type=int, help="Number of players")
@@ -23,7 +32,37 @@ def main() -> None:
     parser.add_argument("--words_file", type=str, help="Words file")
     parser.add_argument("--filter_words", type=str, help="Filter words", choices=["known", "unknown", "all"])
     parser.add_argument("--dry_run", action="store_true", help="Dry run")
+    parser.add_argument(
+        "--game_rules_prompt_file", type=str, help="Game rules prompt file address", required=True
+    )
+    parser.add_argument(
+        "--system_judge_prompt_file", type=str, help="System judge prompt file address", required=True
+    )
+    parser.add_argument(
+        "--user_judge_prompt_file", type=str, help="User judge prompt file address", required=True
+    )
+    parser.add_argument("--history_prompt_file", type=str, help="History prompt file address")
+    parser.add_argument(
+        "--user_generate_definition_prompt_file",
+        type=str,
+        help="User generate definition prompt file address",
+        required=True,
+    )
+    parser.add_argument(
+        "--vote_definition_prompt_file", type=str, help="Vote definition prompt file address", required=True
+    )
     args = parser.parse_args()
+
+    # First of all check if all prompts are valid text files
+    check_prompt_files_validity(
+        [
+            args.game_rules_prompt_file,
+            args.system_judge_prompt_file,
+            args.user_judge_prompt_file,
+            args.user_generate_definition_prompt_file,
+            args.vote_definition_prompt_file,
+        ]
+    )
 
     if args.dry_run:
         # It is a dry run, just one round with one word, not saving to the database
@@ -37,6 +76,7 @@ def main() -> None:
         judge_llm_model_name=args.judge_llm_model,
         judge_llm_gpu=args.llm_gpu_mapping[0],
         llms_temperature=args.llms_temperature,
+        history_type=args.history_type,
         history_window_size=args.history_window_size,
         receiving_vote_points=args.receiving_vote_points,
         correct_vote_points=args.correct_vote_points,
@@ -44,6 +84,12 @@ def main() -> None:
         num_rounds=args.num_rounds,
         words_file=args.words_file,
         filter_words=args.filter_words,
+        game_rules_prompt_file=args.game_rules_prompt_file,
+        system_judge_prompt_file=args.system_judge_prompt_file,
+        user_judge_prompt_file=args.user_judge_prompt_file,
+        history_prompt_file=args.history_prompt_file,
+        user_generate_definition_prompt_file=args.user_generate_definition_prompt_file,
+        vote_definition_prompt_file=args.vote_definition_prompt_file,
         dry_run=args.dry_run,
     )
 
