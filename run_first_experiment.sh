@@ -178,5 +178,3 @@ done
 
 # Wait for any remaining background jobs to complete
 wait
-
-# TODO: call the evaluation script here with the game_id ranges related to this experiment
