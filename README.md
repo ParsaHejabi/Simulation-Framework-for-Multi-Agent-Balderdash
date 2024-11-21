@@ -1,4 +1,4 @@
-# Evaluating Creativity and Deception in Large Language Models: A Simulation Framework for Multi-Agent Balderdash
+# [Evaluating Creativity and Deception in Large Language Models: A Simulation Framework for Multi-Agent Balderdash](https://wordplay-workshop.github.io/pdfs/22.pdf)
 
 By Parsa Hejabi, Elnaz Rahmati, Alireza Salkhordeh Ziabari, Preni Golazizian, Jesse Thomason, Morteza Dehghani - University of Southern California
 
