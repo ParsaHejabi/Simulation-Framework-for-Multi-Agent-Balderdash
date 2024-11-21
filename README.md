@@ -123,3 +123,18 @@ All prompts are stored in the `prompts` directory. You can change the prompts by
 |         | Mistral   | 0.36 ± 0.18      | 0.31 ± 0.15      | 0.28 ± 0.06      | 0.36 ± 0.12      | 1.89 ± 0.27      |
 
 **Table 2**: Leaderboard experiment results on "All Balderdash," evaluating each LLM in three different settings based on history type (HT) using the average of LKR, TDR, DR, CGR, and AS metrics over all rounds and games. The highest value of each metric for different game settings is in bold. However, based on the standard deviation, this does not represent absolute superiority.
+
+## Reference
+
+If you use this framework in your research, please cite the following paper:
+
+```
+@inproceedings{hejabievaluating,
+  title={Evaluating Creativity and Deception in Large Language Models: A Simulation Framework for Multi-Agent Balderdash},
+  author={Hejabi, Parsa and Rahmati, Elnaz and Ziabari, Alireza S and Golazizian, Preni and Thomason, Jesse and Dehghani, Morteza},
+  booktitle={The 4th Wordplay: When Language Meets Games @ ACL 2024},
+  year={2024},
+  organization={Association for Computational Linguistics},
+  address={Mexico City, Mexico}
+}
+```
